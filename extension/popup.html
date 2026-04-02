@@ -1,124 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BrainSync</title>
-    <link rel="stylesheet" href="popup.css" />
-  </head>
-  <body>
-    <div class="bg-orb orb-a"></div>
-    <div class="bg-orb orb-b"></div>
-    <div class="noise-layer"></div>
-    <main id="app" class="popup popup-size-large">
-      <section id="welcome-screen" class="screen active click-anywhere">
-        <div class="welcome-wrap">
-          <span class="eyebrow">BrainSync Focus Companion</span>
-          <h1>Welcome to BrainSync</h1>
-          <p>Ready to Enter a State of Mental Flow?</p>
-          <span class="hint">Click anywhere to continue</span>
-        </div>
-      </section>
 
-      <section id="type-screen" class="screen">
-        <header class="top-bar">
-          <button id="notes-toggle" class="icon-btn" aria-label="Open quick notes">🗒</button>
-          <button id="settings-toggle" class="icon-btn" aria-label="Open settings">⚙</button>
-        </header>
-        <div class="content-wrap">
-          <h2>Please Select Your Session Type:</h2>
-          <div class="type-grid">
-            <button class="type-btn" data-type="School">School</button>
-            <button class="type-btn" data-type="Work">Work</button>
-            <button class="type-btn" data-type="Personal/Other">Personal/Other</button>
-          </div>
-        </div>
-      </section>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BrainSync</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
 
-      <section id="session-screen" class="screen">
-        <header class="top-bar">
-          <button id="session-notes-toggle" class="icon-btn" aria-label="Open quick notes">🗒</button>
-          <button id="session-settings-toggle" class="icon-btn" aria-label="Open settings">⚙</button>
-        </header>
-        <div class="content-wrap">
-          <h2 id="session-heading">School Session</h2>
-          <form id="session-form">
-            <label>
-              Session Title
-              <input id="session-title" type="text" required placeholder="e.g. Calculus Revision" />
-            </label>
-            <label>
-              Session Time (minutes)
-              <input id="session-time" type="number" min="1" max="240" required placeholder="e.g. 45" />
-            </label>
-            <label>
-              Session Objective
-              <textarea id="session-objective" rows="3" required placeholder="What do you want to accomplish?"></textarea>
-            </label>
-            <div class="actions">
-              <button type="submit" class="primary-btn">Enter Flow State</button>
-              <button type="button" id="home-btn" class="ghost-btn">Home</button>
-            </div>
-          </form>
-        </div>
-      </section>
+<body>
+  <div class="bg-orb orb-a"></div>
+  <div class="bg-orb orb-b"></div>
+  <div class="noise-layer"></div>
+  <main id="app" class="popup popup-size-large">
+    <section id="welcome-screen" class="screen active click-anywhere">
+      <div class="welcome-wrap">
+        <span class="eyebrow">BrainSync Focus Companion</span>
+        <h1>Welcome to BrainSync</h1>
+        <p>Ready to Enter a State of Mental Flow?</p>
+        <span class="hint">Click anywhere to continue</span>
+      </div>
+    </section>
 
-      <section id="flow-screen" class="screen">
-        <div class="content-wrap">
-          <h2>Flow State Active</h2>
-          <p class="flow-type" id="active-type"></p>
-          <p class="flow-title" id="active-title"></p>
-          <p class="countdown" id="countdown">00:00</p>
-          <p class="subtle">Stay focused. You have this.</p>
+    <section id="type-screen" class="screen">
+      <header class="top-bar">
+        <button id="notes-toggle" class="icon-btn" aria-label="Open quick notes">🗒</button>
+        <button id="settings-toggle" class="icon-btn" aria-label="Open settings">⚙</button>
+      </header>
+      <div class="content-wrap">
+        <h2>Please Select Your Session Type:</h2>
+        <div class="type-grid">
+          <button class="type-btn" data-type="School">School</button>
+          <button class="type-btn" data-type="Work">Work</button>
+          <button class="type-btn" data-type="Personal/Other">Personal/Other</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="session-screen" class="screen">
+      <header class="top-bar">
+        <button id="session-notes-toggle" class="icon-btn" aria-label="Open quick notes">🗒</button>
+        <button id="session-settings-toggle" class="icon-btn" aria-label="Open settings">⚙</button>
+      </header>
+      <div class="content-wrap">
+        <h2 id="session-heading">School Session</h2>
+        <form id="session-form">
+          <label>
+            Session Title
+            <input id="session-title" type="text" required placeholder="e.g. Calculus Revision" />
+          </label>
+          <label>
+            Session Time (minutes)
+            <input id="session-time" type="number" min="1" max="240" required placeholder="e.g. 45" />
+          </label>
+          <label>
+            Session Objective
+            <textarea id="session-objective" rows="3" required placeholder="What do you want to accomplish?"></textarea>
+          </label>
           <div class="actions">
-            <button type="button" id="cancel-flow" class="ghost-btn">End Early</button>
-            <button type="button" id="flow-home" class="ghost-btn">Home</button>
+            <button type="submit" class="primary-btn">Enter Flow State</button>
+            <button type="button" id="home-btn" class="ghost-btn">Home</button>
           </div>
+        </form>
+      </div>
+    </section>
+
+    <section id="flow-screen" class="screen">
+      <div class="content-wrap">
+        <h2>Flow State Active</h2>
+        <p class="flow-type" id="active-type"></p>
+        <p class="flow-title" id="active-title"></p>
+        <p class="countdown" id="countdown">00:00</p>
+        <p class="subtle">Stay focused. You have this.</p>
+        <div class="actions">
+          <button type="button" id="cancel-flow" class="ghost-btn">End Early</button>
+          <button type="button" id="flow-home" class="ghost-btn">Home</button>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
+  </main>
 
-    <aside id="settings-panel" class="panel hidden">
-      <h3>Settings</h3>
-      <label>
-        Popup Size
-        <select id="popup-size">
-          <option value="small">Small</option>
-          <option value="medium">Medium</option>
-          <option value="large" selected>Large</option>
-        </select>
-      </label>
-      <label>
-        Alarm Sound
-        <select id="alarm-sound">
-          <option value="chime" selected>Soft Chime</option>
-          <option value="bell">Soft Bell</option>
-          <option value="wave">Warm Wave</option>
-        </select>
-      </label>
-      <label>
-        Alarm Volume
-        <input id="alarm-volume" type="range" min="0.1" max="1" step="0.05" value="0.45" />
-      </label>
-      <label>
-        Auto Return Home
-        <select id="auto-home">
-          <option value="on" selected>On</option>
-          <option value="off">Off</option>
-        </select>
-      </label>
-      <button id="test-alarm" class="primary-btn">Test Alarm</button>
-      <button id="close-settings" class="ghost-btn">Close</button>
-    </aside>
+  <aside id="settings-panel" class="panel hidden">
+    <h3>Settings</h3>
+    <label>
+      Popup Size
+      <select id="popup-size">
+        <option value="small">Small</option>
+        <option value="medium">Medium</option>
+        <option value="large" selected>Large</option>
+      </select>
+    </label>
+    <label>
+      Alarm Sound
+      <select id="alarm-sound">
+        <option value="chime" selected>Soft Chime</option>
+        <option value="bell">Soft Bell</option>
+        <option value="wave">Warm Wave</option>
+      </select>
+    </label>
+    <label>
+      Alarm Volume
+      <input id="alarm-volume" type="range" min="0.1" max="1" step="0.05" value="0.45" />
+    </label>
+    <label>
+      Auto Return Home
+      <select id="auto-home">
+        <option value="on" selected>On</option>
+        <option value="off">Off</option>
+      </select>
+    </label>
+    <button id="test-alarm" class="primary-btn">Test Alarm</button>
+    <button id="close-settings" class="ghost-btn">Close</button>
+  </aside>
 
-    <aside id="notes-panel" class="panel hidden">
-      <h3>Quick Notes</h3>
-      <textarea id="quick-notes" rows="12" placeholder="Jot things down quickly..."></textarea>
-      <button id="save-notes" class="primary-btn">Save Notes</button>
-      <button id="close-notes" class="ghost-btn">Close</button>
-    </aside>
+  <aside id="notes-panel" class="panel hidden">
+    <h3>Quick Notes</h3>
+    <textarea id="quick-notes" rows="12" placeholder="Jot things down quickly..."></textarea>
+    <button id="save-notes" class="primary-btn">Save Notes</button>
+    <button id="close-notes" class="ghost-btn">Close</button>
+  </aside>
 
-    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-    <script src="popup.js"></script>
-  </body>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <script src="popup.js"></script>
+</body>
+
 </html>
