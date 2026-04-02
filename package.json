@@ -1,0 +1,9 @@
+{
+  "name": "brainsync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BrainSync website launcher",
+  "scripts": {
+    "start": "node website/server.js"
+  }
+}

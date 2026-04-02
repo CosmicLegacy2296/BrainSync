@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "BrainSync",
+  "description": "A clean focus session popup to enter mental flow.",
+  "version": "1.0.0",
+  "action": {
+    "default_title": "BrainSync",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage"
+  ]
+}
