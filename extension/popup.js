@@ -13,7 +13,7 @@ const toast = document.getElementById("toast");
 const popupSizeSelect = document.getElementById("popup-size");
 const alarmSoundSelect = document.getElementById("alarm-sound");
 const alarmVolumeInput = document.getElementById("alarm-volume");
-const autoHomeSelect = document.getElementById("auto-home");
+const smallTimerSelect = document.getElementById("small-timer");
 const quickNotesInput = document.getElementById("quick-notes");
 
 const sessionHeading = document.getElementById("session-heading");
@@ -35,7 +35,7 @@ const defaultSettings = {
   popupSize: "large",
   alarmSound: "chime",
   alarmVolume: 0.45,
-  autoHome: "on"
+  smallTimer: "on"
 };
 
 const storage = {
@@ -98,7 +98,7 @@ function formatTime(msLeft) {
 }
 
 function applyPopupSize(size) {
-  app.classList.remove("popup-size-small", "popup-size-medium", "popup-size-large");
+  app.classList.remove("popup-size-small", "popup-size-medium", "popup-size-large", "popup-size-extra-large");
   app.classList.add(`popup-size-${size}`);
 }
 
@@ -155,28 +155,19 @@ async function playSoftAlarm(soundType, volume) {
   });
 }
 
-async function saveCompletedSession(session) {
-  const existing = await storage.get("brainsyncSessions", []);
-  existing.push(session);
-  await storage.set("brainsyncSessions", existing);
-}
-
-function endFlowSession(completed = false) {
+async function endFlowSession(completed = false) {
   if (flowTimer) {
     clearInterval(flowTimer);
     flowTimer = null;
   }
 
-  if (completed) {
-    playSoftAlarm(alarmSoundSelect.value, alarmVolumeInput.value);
-    showToast("Session complete. Great work.");
-  } else {
+  // If the user manually ended early, clear the session from storage
+  if (!completed) {
     showToast("Session ended early.");
+    await storage.set("brainsyncActiveSession", null);
   }
 
-  if (autoHomeSelect.value === "on") {
-    showScreen("type");
-  }
+  showScreen("type");
 }
 
 async function startFlowSession(payload) {
@@ -189,23 +180,38 @@ async function startFlowSession(payload) {
   countdown.textContent = formatTime(durationMs);
   showScreen("flow");
 
+  // Save to storage; background worker will pick it up and set an alarm
+  const activeSession = {
+    ...payload,
+    endTime,
+    isActive: true
+  };
+  await storage.set("brainsyncActiveSession", activeSession);
+
+  if (flowTimer) clearInterval(flowTimer);
   flowTimer = setInterval(async () => {
     const msLeft = endTime - Date.now();
     countdown.textContent = formatTime(msLeft);
-
     if (msLeft <= 0) {
       clearInterval(flowTimer);
       flowTimer = null;
-      await saveCompletedSession({
-        type: payload.type,
-        title: payload.title,
-        timeMinutes: payload.timeMinutes,
-        objective: payload.objective,
-        completedAt: new Date().toISOString()
-      });
-      endFlowSession(true);
     }
   }, 250);
+}
+
+// Receive messages from background
+if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === "play_alarm") {
+       if (flowTimer) {
+         clearInterval(flowTimer);
+         flowTimer = null;
+       }
+       playSoftAlarm(alarmSoundSelect.value, alarmVolumeInput.value);
+       showToast("Session complete. Great work.");
+       showScreen("type");
+    }
+  });
 }
 
 async function init() {
@@ -215,10 +221,36 @@ async function init() {
   popupSizeSelect.value = settings.popupSize || defaultSettings.popupSize;
   alarmSoundSelect.value = settings.alarmSound || defaultSettings.alarmSound;
   alarmVolumeInput.value = settings.alarmVolume || defaultSettings.alarmVolume;
-  autoHomeSelect.value = settings.autoHome || defaultSettings.autoHome;
+  smallTimerSelect.value = settings.smallTimer || defaultSettings.smallTimer;
   quickNotesInput.value = notes;
 
   applyPopupSize(popupSizeSelect.value);
+
+  // Resume active session if exists
+  const activeSession = await storage.get("brainsyncActiveSession", null);
+  if (activeSession && activeSession.isActive) {
+    if (activeSession.endTime > Date.now()) {
+      currentType = activeSession.type;
+      endTime = activeSession.endTime;
+      activeType.textContent = activeSession.type;
+      activeTitle.textContent = activeSession.title;
+      countdown.textContent = formatTime(endTime - Date.now());
+      showScreen("flow");
+
+      if (flowTimer) clearInterval(flowTimer);
+      flowTimer = setInterval(() => {
+        const msLeft = endTime - Date.now();
+        countdown.textContent = formatTime(msLeft);
+        if (msLeft <= 0) {
+          clearInterval(flowTimer);
+          flowTimer = null;
+        }
+      }, 250);
+    } else {
+      // Session expired while popup closed
+      await storage.set("brainsyncActiveSession", null);
+    }
+  }
 }
 
 document.getElementById("welcome-screen").addEventListener("click", transitionFromWelcome);
@@ -250,13 +282,13 @@ document.getElementById("save-notes").addEventListener("click", async () => {
   showToast("Notes saved.");
 });
 
-[popupSizeSelect, alarmSoundSelect, alarmVolumeInput, autoHomeSelect].forEach((input) => {
+[popupSizeSelect, alarmSoundSelect, alarmVolumeInput, smallTimerSelect].forEach((input) => {
   input.addEventListener("change", async () => {
     const nextSettings = {
       popupSize: popupSizeSelect.value,
       alarmSound: alarmSoundSelect.value,
       alarmVolume: Number(alarmVolumeInput.value),
-      autoHome: autoHomeSelect.value
+      smallTimer: smallTimerSelect.value
     };
     await storage.set("brainsyncSettings", nextSettings);
     applyPopupSize(nextSettings.popupSize);

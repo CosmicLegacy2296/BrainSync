@@ -69,20 +69,10 @@ body {
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-.popup-size-small {
-  width: 340px;
-  height: 500px;
-}
-
-.popup-size-medium {
-  width: 380px;
-  height: 560px;
-}
-
-.popup-size-large {
-  width: 420px;
-  height: 620px;
-}
+.popup-size-small { width: 340px; height: 500px; }
+.popup-size-medium { width: 380px; height: 560px; }
+.popup-size-large { width: 420px; height: 620px; }
+.popup-size-extra-large { width: 780px; height: 600px; }
 
 .screen {
   position: absolute;
