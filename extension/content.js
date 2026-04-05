@@ -43,9 +43,12 @@ function makeDraggable(elmnt) {
 }
 
 async function init() {
-  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings"]);
+  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions"]);
   activeSession = result.brainsyncActiveSession;
   settings = result.brainsyncSettings || { smallTimer: "on" };
+  if (result.brainsyncSessions) {
+    window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: result.brainsyncSessions }, "*");
+  }
   updateUI();
 }
 
@@ -59,6 +62,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
        settings = changes.brainsyncSettings.newValue;
        updateUI();
     }
+    if (changes.brainsyncSessions) {
+       window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: changes.brainsyncSessions.newValue }, "*");
+    }
   }
 });
 
@@ -66,6 +72,16 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === "play_alarm") {
      const s = msg.settings || settings || {};
      playSoftAlarm(s.alarmSound || "chime", s.alarmVolume || 0.45);
+  }
+});
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window || !event.data) return;
+  if (event.data.type === "FROM_BRAINSYNC_WEB" && event.data.action === "START_SESSION") {
+    // Forward to extension storage to trigger timer
+    chrome.storage.local.set({ 
+      brainsyncActiveSession: event.data.sessionData
+    });
   }
 });
 
