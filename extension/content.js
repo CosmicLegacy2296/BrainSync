@@ -10,6 +10,7 @@ function makeDraggable(elmnt) {
 
   function dragMouseDown(e) {
     e = e || window.event;
+    if (e.target && e.target.classList && e.target.classList.contains('bs-mini-close')) return;
     e.preventDefault();
     pos3 = e.clientX;
     pos4 = e.clientY;
@@ -77,11 +78,19 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 window.addEventListener("message", (event) => {
   if (event.source !== window || !event.data) return;
-  if (event.data.type === "FROM_BRAINSYNC_WEB" && event.data.action === "START_SESSION") {
-    // Forward to extension storage to trigger timer
-    chrome.storage.local.set({ 
-      brainsyncActiveSession: event.data.sessionData
-    });
+  if (event.data.type === "FROM_BRAINSYNC_WEB") {
+    if (event.data.action === "START_SESSION") {
+      // Forward to extension storage to trigger timer
+      chrome.storage.local.set({ 
+        brainsyncActiveSession: event.data.sessionData
+      });
+    } else if (event.data.action === "CLEAR_DATA") {
+      // Clear data on restart
+      chrome.storage.local.set({ 
+        brainsyncSessions: [],
+        brainsyncActiveSession: null
+      });
+    }
   }
 });
 
@@ -114,6 +123,7 @@ function updateUI() {
      container.id = "brainsync-mini-timer-container";
      container.innerHTML = `
         <div class="bs-mini-glow"></div>
+        <div class="bs-mini-close">&times;</div>
         <div class="bs-mini-content">
           <div class="bs-mini-header">BrainSync Focus</div>
           <div class="bs-mini-title"></div>
@@ -121,6 +131,19 @@ function updateUI() {
         </div>
      `;
      document.body.appendChild(container);
+     
+     const closeBtn = container.querySelector(".bs-mini-close");
+     closeBtn.addEventListener("click", () => {
+        container.style.opacity = "0";
+        setTimeout(() => {
+          if (container) container.remove();
+          container = null;
+        }, 300);
+        if (timerInterval) {
+           clearInterval(timerInterval);
+           timerInterval = null;
+        }
+     });
      
      // Fade in
      container.offsetHeight;

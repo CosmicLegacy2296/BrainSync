@@ -2,8 +2,8 @@ const app = {
   views: {
     home: `
       <div class="hero-container">
-        <h1 class="hero-title">Enter a <span class="accent">flow state</span><br>with BrainSync.</h1>
-        <p class="hero-subtitle">The premium focus timer that synchronizes your deep work seamlessly. Stay undistracted, achieve your goals.</p>
+        <h1 class="hero-title">Enter a <span class="accent">Flow State</span><br>with BrainSync.</h1>
+        <p class="hero-subtitle">The premium focus timer that syncs your brain to deep work seamlessly. Stay undistracted, achieve your goals.</p>
         <button class="btn-primary" onclick="app.navigate('dashboard')">Get Started</button>
       </div>
     `,
@@ -51,14 +51,6 @@ const app = {
 
   mockSessions: [
     {
-      id: "s1",
-      title: "Calculus studying",
-      duration: 1, 
-      intent: "Complete calculus homework",
-      stats: "Focus: 95% - Highly Focused",
-      type: "history"
-    },
-    {
       id: "s2",
       title: "Deep Meditation",
       duration: 5,
@@ -84,12 +76,29 @@ const app = {
     }
   ],
 
-  init() {
+  async init() {
     this.contentArea = document.getElementById("app-content");
     this.navLinks = document.querySelectorAll(".nav-link");
     this.navBrand = document.querySelector(".nav-brand");
 
-    // Bind navigation click events
+    try {
+      const res = await fetch("/api/startup-id");
+      if (res.ok) {
+        const data = await res.json();
+        const lastId = localStorage.getItem("brainsync_server_id");
+        if (lastId !== data.id) {
+          localStorage.setItem("brainsync_server_id", data.id);
+          this.mockSessions = this.mockSessions.filter(s => s.type !== "history");
+          window.postMessage({
+            type: "FROM_BRAINSYNC_WEB",
+            action: "CLEAR_DATA"
+          }, "*");
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch startup id", e);
+    }
+
     this.navLinks.forEach(link => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
@@ -100,17 +109,15 @@ const app = {
 
     this.navBrand.addEventListener("click", () => this.navigate('home'));
 
-    // Initialize with home or hash
     const initialRoute = window.location.hash.replace('#', '') || 'home';
     this.navigate(initialRoute);
   },
 
   navigate(route) {
     if (!this.views[route]) route = 'home';
-    
+
     window.location.hash = route;
-    
-    // Update active nav state
+
     this.navLinks.forEach(link => {
       if (link.getAttribute("data-route") === route) {
         link.classList.add("active");
@@ -119,8 +126,8 @@ const app = {
       }
     });
 
-    // Render HTML with a brief fade-out/fade-in
-    this.contentArea.innerHTML = `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
+    this.contentArea.innerHTML =
+      `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
 
     if (route === 'quickstart') {
       this.renderList('quickstart');
@@ -143,9 +150,9 @@ const app = {
     filteredSessions.forEach(session => {
       const card = document.createElement("div");
       card.className = "session-card";
-      
+
       const isPreset = session.type === "preset";
-      const actionButtonHTML = isPreset 
+      const actionButtonHTML = isPreset
         ? `<button class="session-action" onclick="app.startSessionClick('${session.id}', event)">▶ Start ${session.duration}m Session</button>`
         : '';
 
@@ -172,13 +179,11 @@ const app = {
   },
 
   startSessionClick(sessionId, event) {
-    // Prevent the click from collapsing the card immediately
     event.stopPropagation();
-    
+
     const session = this.mockSessions.find(s => s.id === sessionId);
     if (!session) return;
-    
-    // Calculate end time
+
     const durationMs = session.duration * 60 * 1000;
     const sessionData = {
       title: session.title,
@@ -189,7 +194,6 @@ const app = {
       isActive: true
     };
 
-    // Send cross-origin message to Content Script injected by the extension
     window.postMessage({
       type: "FROM_BRAINSYNC_WEB",
       action: "START_SESSION",
@@ -211,15 +215,15 @@ window.addEventListener("message", (event) => {
     const extSessions = (event.data.sessions || []).map((s, index) => ({
       id: "ext_" + index,
       title: s.title,
-      duration: s.duration || Math.round((s.endTime - s.startTime)/60000),
+      duration: s.duration || Math.round((s.endTime - s.startTime) / 60000),
       intent: s.intent || "Self-guided session",
       stats: "Completed " + new Date(s.completedAt).toLocaleTimeString(),
       type: "history"
     }));
-    
+
     app.mockSessions = app.mockSessions.filter(s => !s.id.startsWith("ext_"));
     app.mockSessions.push(...extSessions);
-    
+
     if (window.location.hash === "#insights") app.navigate('insights');
   }
 });

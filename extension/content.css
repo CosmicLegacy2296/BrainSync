@@ -71,6 +71,30 @@
   text-shadow: 0 0 12px rgba(255, 230, 110, 0.3);
 }
 
+#brainsync-mini-timer-container .bs-mini-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.05);
+  line-height: 1;
+}
+
+#brainsync-mini-timer-container .bs-mini-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
 @keyframes bs-pulse {
   0% { transform: scale(1); opacity: 0.2; }
   100% { transform: scale(1.5); opacity: 0.4; }

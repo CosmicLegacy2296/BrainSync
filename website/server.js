@@ -15,7 +15,14 @@ const mimeTypes = {
   ".svg": "image/svg+xml; charset=utf-8",
 };
 
+const serverId = Date.now().toString();
+
 const server = http.createServer((req, res) => {
+  if (req.url === "/api/startup-id") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ id: serverId }));
+  }
+
   let filePath = path.join(__dirname, req.url === "/" ? "index.html" : req.url);
   const extname = String(path.extname(filePath)).toLowerCase();
 
