@@ -3,6 +3,7 @@ let settings = null;
 let timerInterval = null;
 let container = null;
 let audioContext = null;
+let currentFocusLevel = 100;
 
 function makeDraggable(elmnt) {
   let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
@@ -44,8 +45,9 @@ function makeDraggable(elmnt) {
 }
 
 async function init() {
-  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions"]);
+  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", "brainsyncFocusLevel"]);
   activeSession = result.brainsyncActiveSession;
+  currentFocusLevel = result.brainsyncFocusLevel ?? 100;
   settings = result.brainsyncSettings || { smallTimer: "on" };
   if (result.brainsyncSessions) {
     window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: result.brainsyncSessions }, "*");
@@ -63,16 +65,32 @@ chrome.storage.onChanged.addListener((changes, area) => {
        settings = changes.brainsyncSettings.newValue;
        updateUI();
     }
+    if (changes.brainsyncFocusLevel) {
+       currentFocusLevel = changes.brainsyncFocusLevel.newValue ?? 100;
+       updateFocusBar();
+    }
     if (changes.brainsyncSessions) {
        window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: changes.brainsyncSessions.newValue }, "*");
     }
   }
 });
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "play_alarm") {
      const s = msg.settings || settings || {};
      playSoftAlarm(s.alarmSound || "chime", s.alarmVolume || 0.45);
+  }
+  if (msg.action === "scan_keywords") {
+    const text = document.body.innerText.toLowerCase();
+    const keywords = msg.keywords || [];
+    let matchFound = false;
+    for (const kw of keywords) {
+      if (text.includes(kw.toLowerCase())) {
+        matchFound = true;
+        break;
+      }
+    }
+    sendResponse({ match: matchFound });
   }
 });
 
@@ -128,6 +146,8 @@ function updateUI() {
           <div class="bs-mini-header">BrainSync Focus</div>
           <div class="bs-mini-title"></div>
           <div class="bs-mini-countdown"></div>
+          <div class="bs-mini-focus">Focus: <span class="bs-mini-focus-text">100%</span></div>
+          <div class="bs-mini-focus-bar-bg"><div class="bs-mini-focus-bar-fill"></div></div>
         </div>
      `;
      document.body.appendChild(container);
@@ -177,6 +197,25 @@ function updateUI() {
   container.querySelector(".bs-mini-title").textContent = activeSession.title;
   const initialMsLeft = activeSession.endTime - Date.now();
   container.querySelector(".bs-mini-countdown").textContent = formatTime(initialMsLeft);
+  updateFocusBar();
+}
+
+function updateFocusBar() {
+  if (!container) return;
+  const levelText = container.querySelector(".bs-mini-focus-text");
+  const barFill = container.querySelector(".bs-mini-focus-bar-fill");
+  if (levelText && barFill) {
+    const safeLevel = Math.max(0, Math.min(100, Math.round(currentFocusLevel)));
+    levelText.textContent = `${safeLevel}%`;
+    barFill.style.width = `${safeLevel}%`;
+    if (safeLevel < 40) {
+      barFill.style.background = "linear-gradient(90deg, #ff4d4d, #ff8080)";
+    } else if (safeLevel < 70) {
+      barFill.style.background = "linear-gradient(90deg, #ffb347, #ffcc33)";
+    } else {
+      barFill.style.background = "linear-gradient(90deg, #18c2ff, #7cf8e3)";
+    }
+  }
 }
 
 async function ensureAudioReady() {

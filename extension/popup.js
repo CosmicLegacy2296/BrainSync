@@ -25,6 +25,8 @@ const sessionObjectiveInput = document.getElementById("session-objective");
 const activeType = document.getElementById("active-type");
 const activeTitle = document.getElementById("active-title");
 const countdown = document.getElementById("countdown");
+const focusLevelText = document.getElementById("focus-level-text");
+const focusMeterBarFill = document.getElementById("focus-meter-bar-fill");
 
 let currentType = "School";
 let flowTimer = null;
@@ -214,6 +216,30 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   });
 }
 
+function updateFocusMeter(level) {
+  if (focusLevelText && focusMeterBarFill) {
+    const safeLevel = Math.max(0, Math.min(100, Math.round(level)));
+    focusLevelText.textContent = `${safeLevel}%`;
+    focusMeterBarFill.style.width = `${safeLevel}%`;
+    
+    if (safeLevel < 40) {
+      focusMeterBarFill.style.background = "linear-gradient(90deg, #ff4d4d, #ff8080)";
+    } else if (safeLevel < 70) {
+      focusMeterBarFill.style.background = "linear-gradient(90deg, #ffb347, #ffcc33)";
+    } else {
+      focusMeterBarFill.style.background = "linear-gradient(90deg, #18c2ff, var(--accent))";
+    }
+  }
+}
+
+if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.brainsyncFocusLevel) {
+      updateFocusMeter(changes.brainsyncFocusLevel.newValue);
+    }
+  });
+}
+
 async function init() {
   const settings = await storage.get("brainsyncSettings", defaultSettings);
   const notes = await storage.get("brainsyncQuickNotes", "");
@@ -225,6 +251,9 @@ async function init() {
   quickNotesInput.value = notes;
 
   applyPopupSize(popupSizeSelect.value);
+
+  const initialFocus = await storage.get("brainsyncFocusLevel", 100);
+  updateFocusMeter(initialFocus);
 
   // Resume active session if exists
   const activeSession = await storage.get("brainsyncActiveSession", null);
@@ -310,6 +339,8 @@ sessionForm.addEventListener("submit", async (event) => {
     timeMinutes: sessionTimeInput.value,
     objective: sessionObjectiveInput.value.trim()
   });
+  await storage.set("brainsyncFocusLevel", 100);
+  updateFocusMeter(100);
 });
 
 init();
