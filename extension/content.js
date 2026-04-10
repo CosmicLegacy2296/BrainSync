@@ -4,6 +4,8 @@ let timerInterval = null;
 let container = null;
 let audioContext = null;
 let currentFocusLevel = 100;
+let breathingState = null;
+let breathingHideTimeout = null;
 
 function makeDraggable(elmnt) {
   let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
@@ -45,18 +47,24 @@ function makeDraggable(elmnt) {
 }
 
 async function init() {
-  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", "brainsyncFocusLevel"]);
+  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", "brainsyncFocusLevel", "brainsyncBreathing"]);
   activeSession = result.brainsyncActiveSession;
   currentFocusLevel = result.brainsyncFocusLevel ?? 100;
+  breathingState = result.brainsyncBreathing || null;
   settings = result.brainsyncSettings || { smallTimer: "on" };
   if (result.brainsyncSessions) {
     window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: result.brainsyncSessions }, "*");
   }
   updateUI();
+  handleMiniBreathing(breathingState);
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local") {
+    if (changes.brainsyncBreathing) {
+       breathingState = changes.brainsyncBreathing.newValue;
+       handleMiniBreathing(breathingState);
+    }
     if (changes.brainsyncActiveSession) {
        activeSession = changes.brainsyncActiveSession.newValue;
        updateUI();
@@ -149,6 +157,15 @@ function updateUI() {
           <div class="bs-mini-focus">Focus: <span class="bs-mini-focus-text">100%</span></div>
           <div class="bs-mini-focus-bar-bg"><div class="bs-mini-focus-bar-fill"></div></div>
         </div>
+        <div class="bs-mini-breathing-overlay" style="display: none; opacity: 0; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+          <div class="bs-mini-pause-text" style="color: #ffeb3b; font-size: 11px; text-align: center; margin-bottom: 6px; font-weight: 600;">Your Losing Focus. Breathe To Re-Sync Your Brain</div>
+          <button class="bs-mini-proceed-btn" style="background:#ffd24a; color:#111; border:none; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; cursor:pointer; margin-bottom: 8px;">Proceed</button>
+          <div class="bs-mini-breathe-circle-container" style="display: none;">
+            <div class="bs-mini-breathe-ripple"></div>
+            <div class="bs-mini-breathe-circle"></div>
+          </div>
+          <div class="bs-mini-breathe-text" style="color: white; font-size: 11px; font-weight: bold; margin-top: 8px; display: none;"></div>
+        </div>
      `;
      document.body.appendChild(container);
      
@@ -163,6 +180,11 @@ function updateUI() {
            clearInterval(timerInterval);
            timerInterval = null;
         }
+     });
+
+     const proceedBtn = container.querySelector(".bs-mini-proceed-btn");
+     proceedBtn.addEventListener("click", () => {
+         chrome.runtime.sendMessage({ action: "start_breathing_sequence" });
      });
      
      // Fade in
@@ -183,8 +205,12 @@ function updateUI() {
 
      timerInterval = setInterval(() => {
         if (!activeSession) return;
-        const msLeft = activeSession.endTime - Date.now();
         const countdownEl = container.querySelector(".bs-mini-countdown");
+        if (activeSession.isPaused) {
+           if (countdownEl) countdownEl.textContent = formatTime(activeSession.remainingMs);
+           return;
+        }
+        const msLeft = activeSession.endTime - Date.now();
         if (countdownEl) {
            countdownEl.textContent = formatTime(msLeft);
         }
@@ -195,9 +221,69 @@ function updateUI() {
   }
 
   container.querySelector(".bs-mini-title").textContent = activeSession.title;
-  const initialMsLeft = activeSession.endTime - Date.now();
+  const initialMsLeft = activeSession.isPaused ? activeSession.remainingMs : (activeSession.endTime - Date.now());
   container.querySelector(".bs-mini-countdown").textContent = formatTime(initialMsLeft);
   updateFocusBar();
+
+  if (breathingState) handleMiniBreathing(breathingState);
+}
+
+function handleMiniBreathing(data) {
+  if (!container) return;
+  const contentEl = container.querySelector(".bs-mini-content");
+  const overlayEl = container.querySelector(".bs-mini-breathing-overlay");
+  if (!contentEl || !overlayEl) return;
+
+  if (data && data.isActive) {
+    if (breathingHideTimeout) {
+      clearTimeout(breathingHideTimeout);
+      breathingHideTimeout = null;
+    }
+    contentEl.style.display = "none";
+    overlayEl.style.display = "flex";
+    setTimeout(() => overlayEl.style.opacity = "1", 10);
+    
+    const circle = overlayEl.querySelector(".bs-mini-breathe-circle");
+    const containerInner = overlayEl.querySelector(".bs-mini-breathe-circle-container");
+    const text = overlayEl.querySelector(".bs-mini-breathe-text");
+    const proceedBtn = overlayEl.querySelector(".bs-mini-proceed-btn");
+    
+    if (data.state === "message_prompt" || data.state === "message") {
+      proceedBtn.style.display = "block";
+      containerInner.style.display = "none";
+      text.style.display = "none";
+      circle.className = "bs-mini-breathe-circle";
+      text.textContent = "";
+      text.style.opacity = "0";
+      containerInner.classList.remove("animating");
+    } else {
+      proceedBtn.style.display = "none";
+      containerInner.style.display = "flex";
+      text.style.display = "block";
+      containerInner.classList.add("animating");
+      
+      if (data.state === "breathe_in") {
+        circle.className = "bs-mini-breathe-circle breathe-in";
+        text.textContent = "Breathe In";
+        text.style.opacity = "1";
+      } else if (data.state === "breathe_out") {
+        circle.className = "bs-mini-breathe-circle breathe-out";
+        text.textContent = "Breathe Out";
+        text.style.opacity = "1";
+      }
+    }
+  } else {
+    overlayEl.style.opacity = "0";
+    if (breathingHideTimeout) {
+      clearTimeout(breathingHideTimeout);
+    }
+    breathingHideTimeout = setTimeout(() => {
+      overlayEl.style.display = "none";
+      contentEl.style.display = "block";
+      const containerInner = overlayEl.querySelector(".bs-mini-breathe-circle-container");
+      if (containerInner) containerInner.classList.remove("animating");
+    }, 300);
+  }
 }
 
 function updateFocusBar() {

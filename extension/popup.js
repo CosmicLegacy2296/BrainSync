@@ -3,7 +3,8 @@ const screens = {
   welcome: document.getElementById("welcome-screen"),
   type: document.getElementById("type-screen"),
   session: document.getElementById("session-screen"),
-  flow: document.getElementById("flow-screen")
+  flow: document.getElementById("flow-screen"),
+  breathing: document.getElementById("breathing-screen")
 };
 
 const settingsPanel = document.getElementById("settings-panel");
@@ -32,6 +33,8 @@ let currentType = "School";
 let flowTimer = null;
 let endTime = null;
 let audioContext = null;
+let isPaused = false;
+let remainingMs = 0;
 
 const defaultSettings = {
   popupSize: "large",
@@ -192,6 +195,10 @@ async function startFlowSession(payload) {
 
   if (flowTimer) clearInterval(flowTimer);
   flowTimer = setInterval(async () => {
+    if (isPaused) {
+      countdown.textContent = formatTime(remainingMs);
+      return;
+    }
     const msLeft = endTime - Date.now();
     countdown.textContent = formatTime(msLeft);
     if (msLeft <= 0) {
@@ -232,10 +239,66 @@ function updateFocusMeter(level) {
   }
 }
 
+function handleBreathingState(data) {
+  if (data && data.isActive) {
+    showScreen("breathing");
+    const container = document.querySelector(".breathing-circle-container");
+    const circle = document.getElementById("breathing-circle");
+    const text = document.getElementById("breathing-text");
+    const proceedBtn = document.getElementById("breathing-proceed-btn");
+    const circleWrap = document.getElementById("breathing-circle-wrap");
+    
+    if (data.state === "message_prompt" || data.state === "message") {
+      proceedBtn.style.display = "block";
+      circleWrap.style.display = "none";
+      circle.className = "breathing-circle";
+      text.textContent = "";
+      text.style.opacity = "0";
+      container.classList.remove("animating");
+    } else {
+      proceedBtn.style.display = "none";
+      circleWrap.style.display = "flex";
+      container.classList.add("animating");
+      
+      if (data.state === "breathe_in") {
+        circle.className = "breathing-circle breathe-in";
+        text.textContent = "Breathe In";
+        text.style.opacity = "1";
+      } else if (data.state === "breathe_out") {
+        circle.className = "breathing-circle breathe-out";
+        text.textContent = "Breathe Out";
+        text.style.opacity = "1";
+      }
+    }
+  } else {
+    const container = document.querySelector(".breathing-circle-container");
+    if (container) container.classList.remove("animating");
+    if (screens.breathing && screens.breathing.classList.contains("active")) {
+      showScreen("flow");
+    }
+  }
+}
+
 if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.brainsyncFocusLevel) {
-      updateFocusMeter(changes.brainsyncFocusLevel.newValue);
+    if (area === "local") {
+      if (changes.brainsyncFocusLevel) {
+        updateFocusMeter(changes.brainsyncFocusLevel.newValue);
+      }
+      if (changes.brainsyncBreathing) {
+        handleBreathingState(changes.brainsyncBreathing.newValue);
+      }
+      if (changes.brainsyncActiveSession) {
+        const s = changes.brainsyncActiveSession.newValue;
+        if (s && s.isActive) {
+          isPaused = !!s.isPaused;
+          if (isPaused) {
+            remainingMs = s.remainingMs;
+          } else {
+            endTime = s.endTime;
+          }
+        }
+      }
     }
   });
 }
@@ -256,18 +319,25 @@ async function init() {
   updateFocusMeter(initialFocus);
 
   // Resume active session if exists
+  const breathingState = await storage.get("brainsyncBreathing", null);
   const activeSession = await storage.get("brainsyncActiveSession", null);
   if (activeSession && activeSession.isActive) {
-    if (activeSession.endTime > Date.now()) {
+    if (activeSession.isPaused || activeSession.endTime > Date.now()) {
       currentType = activeSession.type;
       endTime = activeSession.endTime;
+      isPaused = !!activeSession.isPaused;
+      remainingMs = activeSession.remainingMs || 0;
       activeType.textContent = activeSession.type;
       activeTitle.textContent = activeSession.title;
-      countdown.textContent = formatTime(endTime - Date.now());
+      countdown.textContent = formatTime(isPaused ? remainingMs : (endTime - Date.now()));
       showScreen("flow");
 
       if (flowTimer) clearInterval(flowTimer);
       flowTimer = setInterval(() => {
+        if (isPaused) {
+          countdown.textContent = formatTime(remainingMs);
+          return;
+        }
         const msLeft = endTime - Date.now();
         countdown.textContent = formatTime(msLeft);
         if (msLeft <= 0) {
@@ -275,6 +345,8 @@ async function init() {
           flowTimer = null;
         }
       }, 250);
+
+      if (breathingState) handleBreathingState(breathingState);
     } else {
       // Session expired while popup closed
       await storage.set("brainsyncActiveSession", null);
@@ -294,6 +366,15 @@ document.querySelectorAll(".type-btn").forEach((button) => {
     showScreen("session");
   });
 });
+
+const proceedBreathingBtn = document.getElementById("breathing-proceed-btn");
+if (proceedBreathingBtn) {
+  proceedBreathingBtn.addEventListener("click", () => {
+    if (typeof chrome !== "undefined" && chrome.runtime) {
+      chrome.runtime.sendMessage({ action: "start_breathing_sequence" });
+    }
+  });
+}
 
 document.getElementById("home-btn").addEventListener("click", () => showScreen("type"));
 document.getElementById("flow-home").addEventListener("click", () => showScreen("type"));
