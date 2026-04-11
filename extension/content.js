@@ -4,6 +4,8 @@ let timerInterval = null;
 let container = null;
 let audioContext = null;
 let currentFocusLevel = 100;
+let currentDistractionRisk = 0;
+let lastOverlayWarningTime = 0;
 let breathingState = null;
 let breathingHideTimeout = null;
 
@@ -47,9 +49,13 @@ function makeDraggable(elmnt) {
 }
 
 async function init() {
-  const result = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", "brainsyncFocusLevel", "brainsyncBreathing"]);
+  const result = await chrome.storage.local.get([
+    "brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", 
+    "brainsyncFocusLevel", "brainsyncDistractionRisk", "brainsyncBreathing"
+  ]);
   activeSession = result.brainsyncActiveSession;
   currentFocusLevel = result.brainsyncFocusLevel ?? 100;
+  currentDistractionRisk = result.brainsyncDistractionRisk || 0;
   breathingState = result.brainsyncBreathing || null;
   settings = result.brainsyncSettings || { smallTimer: "on" };
   if (result.brainsyncSessions) {
@@ -57,6 +63,7 @@ async function init() {
   }
   updateUI();
   handleMiniBreathing(breathingState);
+  handleRiskWarning();
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -76,6 +83,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.brainsyncFocusLevel) {
        currentFocusLevel = changes.brainsyncFocusLevel.newValue ?? 100;
        updateFocusBar();
+    }
+    if (changes.brainsyncDistractionRisk) {
+       currentDistractionRisk = changes.brainsyncDistractionRisk.newValue || 0;
+       handleRiskWarning();
     }
     if (changes.brainsyncSessions) {
        window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: changes.brainsyncSessions.newValue }, "*");
@@ -106,12 +117,10 @@ window.addEventListener("message", (event) => {
   if (event.source !== window || !event.data) return;
   if (event.data.type === "FROM_BRAINSYNC_WEB") {
     if (event.data.action === "START_SESSION") {
-      // Forward to extension storage to trigger timer
       chrome.storage.local.set({ 
         brainsyncActiveSession: event.data.sessionData
       });
     } else if (event.data.action === "CLEAR_DATA") {
-      // Clear data on restart
       chrome.storage.local.set({ 
         brainsyncSessions: [],
         brainsyncActiveSession: null
@@ -143,7 +152,6 @@ function updateUI() {
     return;
   }
 
-  // Create UI if not exists
   if (!container) {
      container = document.createElement("div");
      container.id = "brainsync-mini-timer-container";
@@ -156,6 +164,11 @@ function updateUI() {
           <div class="bs-mini-countdown"></div>
           <div class="bs-mini-focus">Focus: <span class="bs-mini-focus-text">100%</span></div>
           <div class="bs-mini-focus-bar-bg"><div class="bs-mini-focus-bar-fill"></div></div>
+          <div class="bs-mini-risk-warning" style="display:none; color:#ffb347; font-size:10px; margin-top:6px; text-align:center; font-weight:bold; transition:all 0.3s ease;"></div>
+        </div>
+        <div class="bs-mini-risk-overlay" style="display:none; opacity:0; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,50,50,0.95); color:white; flex-direction:column; align-items:center; justify-content:center; border-radius:inherit; transition:opacity 0.2s ease; z-index:10; pointer-events:none;">
+          <div style="font-weight:900; font-size:12px; text-align:center; margin-bottom:4px; letter-spacing:0.5px;">FOCUS DRIFT DETECTED</div>
+          <div style="font-size:10px; text-align:center; padding:0 8px;">Return to your task!</div>
         </div>
         <div class="bs-mini-breathing-overlay" style="display: none; opacity: 0; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
           <div class="bs-mini-pause-text" style="color: #ffeb3b; font-size: 11px; text-align: center; margin-bottom: 6px; font-weight: 600;">Your Losing Focus. Breathe To Re-Sync Your Brain</div>
@@ -187,11 +200,9 @@ function updateUI() {
          chrome.runtime.sendMessage({ action: "start_breathing_sequence" });
      });
      
-     // Fade in
      container.offsetHeight;
      container.style.opacity = "1";
 
-     // Restore custom position if saved
      chrome.storage.local.get("brainsyncTimerPos", (data) => {
         if (data.brainsyncTimerPos) {
            container.style.top = data.brainsyncTimerPos.top;
@@ -226,6 +237,49 @@ function updateUI() {
   updateFocusBar();
 
   if (breathingState) handleMiniBreathing(breathingState);
+  handleRiskWarning();
+}
+
+function handleRiskWarning() {
+  if (!container) return;
+  const warningText = container.querySelector(".bs-mini-risk-warning");
+  const riskOverlay = container.querySelector(".bs-mini-risk-overlay");
+  if (!warningText || !riskOverlay) return;
+
+  const risk = currentDistractionRisk;
+
+  if (risk < 30) {
+    warningText.style.display = "none";
+    container.style.boxShadow = "none";
+  } else if (risk < 50) {
+    warningText.style.display = "block";
+    warningText.style.color = "#ffb347";
+    warningText.textContent = "You're starting to lose focus...";
+    container.style.boxShadow = "none";
+  } else if (risk < 70) {
+    warningText.style.display = "block";
+    warningText.style.color = "#ff4d4d";
+    warningText.textContent = "Too many quick switches detected!";
+    container.style.boxShadow = "0 0 15px rgba(255, 77, 77, 0.6)";
+  } else {
+    warningText.style.display = "block";
+    warningText.style.color = "#ff4d4d";
+    warningText.textContent = "CRITICAL RISK: Losing focus!";
+    container.style.boxShadow = "0 0 20px rgba(255, 0, 0, 0.8)";
+    
+    const now = Date.now();
+    if (now - lastOverlayWarningTime > 20000) {
+       lastOverlayWarningTime = now;
+       riskOverlay.style.display = "flex";
+       setTimeout(() => riskOverlay.style.opacity = "1", 10);
+       setTimeout(() => {
+          riskOverlay.style.opacity = "0";
+          setTimeout(() => {
+            if (riskOverlay) riskOverlay.style.display = "none";
+          }, 200);
+       }, 2000);
+    }
+  }
 }
 
 function handleMiniBreathing(data) {
