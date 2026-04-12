@@ -164,13 +164,6 @@ p {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.type-grid {
-  width: 100%;
-  display: grid;
-  gap: 12px;
-}
-
-.type-btn,
 .primary-btn,
 .ghost-btn {
   border-radius: 12px;
@@ -180,7 +173,6 @@ p {
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
-.type-btn,
 .primary-btn {
   border: none;
   background: linear-gradient(135deg, var(--yellow), var(--yellow-2));
@@ -189,7 +181,6 @@ p {
   box-shadow: 0 8px 20px rgba(255, 210, 74, 0.25);
 }
 
-.type-btn:hover,
 .primary-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 22px rgba(255, 210, 74, 0.35);

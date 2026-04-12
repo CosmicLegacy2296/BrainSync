@@ -12,10 +12,12 @@
   <body>
     <!-- Navigation -->
     <nav class="navbar">
-      <div class="nav-brand" data-route="home">BrainSync</div>
+      <div class="nav-brand" data-route="home">
+         <img src="/logo.png" alt="BrainSync" style="height: 32px; vertical-align: middle; margin-right: 8px; border-radius: 6px;">
+         BrainSync
+      </div>
       <div class="nav-links">
         <a href="#home" data-route="home" class="nav-link active">Home</a>
-        <a href="#dashboard" data-route="dashboard" class="nav-link">Dashboard</a>
         <a href="#quickstart" data-route="quickstart" class="nav-link">Quick Start</a>
         <a href="#insights" data-route="insights" class="nav-link">Insights</a>
       </div>
@@ -25,8 +27,9 @@
     <main id="app-content">
       <!-- Views will be injected here by app.js -->
     </main>
-    <!-- Modal Overlay -->
+    <!-- Modal Overlays -->
     <div id="insight-modal-overlay" class="modal-overlay"></div>
+    <div id="preset-modal-overlay" class="modal-overlay"></div>
 
     <script src="/app.js"></script>
   </body>

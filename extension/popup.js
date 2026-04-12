@@ -1,7 +1,6 @@
 const app = document.getElementById("app");
 const screens = {
   welcome: document.getElementById("welcome-screen"),
-  type: document.getElementById("type-screen"),
   session: document.getElementById("session-screen"),
   flow: document.getElementById("flow-screen"),
   breathing: document.getElementById("breathing-screen")
@@ -18,6 +17,7 @@ const smallTimerSelect = document.getElementById("small-timer");
 const quickNotesInput = document.getElementById("quick-notes");
 
 const sessionHeading = document.getElementById("session-heading");
+const sessionScreenHeading = "Start Session";
 const sessionForm = document.getElementById("session-form");
 const sessionTitleInput = document.getElementById("session-title");
 const sessionTimeInput = document.getElementById("session-time");
@@ -91,7 +91,8 @@ function transitionFromWelcome() {
   screens.welcome.classList.add("fading");
   setTimeout(() => {
     screens.welcome.classList.remove("fading");
-    showScreen("type");
+    sessionHeading.textContent = sessionScreenHeading;
+    showScreen("session");
   }, 250);
 }
 
@@ -172,7 +173,8 @@ async function endFlowSession(completed = false) {
     await storage.set("brainsyncActiveSession", null);
   }
 
-  showScreen("type");
+  sessionHeading.textContent = sessionScreenHeading;
+  showScreen("session");
 }
 
 async function startFlowSession(payload) {
@@ -212,13 +214,14 @@ async function startFlowSession(payload) {
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === "play_alarm") {
-       if (flowTimer) {
-         clearInterval(flowTimer);
-         flowTimer = null;
-       }
-       playSoftAlarm(alarmSoundSelect.value, alarmVolumeInput.value);
-       showToast("Session complete. Great work.");
-       showScreen("type");
+      if (flowTimer) {
+        clearInterval(flowTimer);
+        flowTimer = null;
+      }
+      playSoftAlarm(alarmSoundSelect.value, alarmVolumeInput.value);
+      showToast("Session complete. Great work.");
+      sessionHeading.textContent = sessionScreenHeading;
+      showScreen("session");
     }
   });
 }
@@ -228,7 +231,7 @@ function updateFocusMeter(level) {
     const safeLevel = Math.max(0, Math.min(100, Math.round(level)));
     focusLevelText.textContent = `${safeLevel}%`;
     focusMeterBarFill.style.width = `${safeLevel}%`;
-    
+
     if (safeLevel < 40) {
       focusMeterBarFill.style.background = "linear-gradient(90deg, #ff4d4d, #ff8080)";
     } else if (safeLevel < 70) {
@@ -247,7 +250,7 @@ function handleBreathingState(data) {
     const text = document.getElementById("breathing-text");
     const proceedBtn = document.getElementById("breathing-proceed-btn");
     const circleWrap = document.getElementById("breathing-circle-wrap");
-    
+
     if (data.state === "message_prompt" || data.state === "message") {
       proceedBtn.style.display = "block";
       circleWrap.style.display = "none";
@@ -259,7 +262,7 @@ function handleBreathingState(data) {
       proceedBtn.style.display = "none";
       circleWrap.style.display = "flex";
       container.classList.add("animating");
-      
+
       if (data.state === "breathe_in") {
         circle.className = "breathing-circle breathe-in";
         text.textContent = "Breathe In";
@@ -359,14 +362,6 @@ document.body.addEventListener("click", () => {
   ensureAudioReady();
 }, { once: true });
 
-document.querySelectorAll(".type-btn").forEach((button) => {
-  button.addEventListener("click", () => {
-    currentType = button.dataset.type;
-    sessionHeading.textContent = `${currentType} Session`;
-    showScreen("session");
-  });
-});
-
 const proceedBreathingBtn = document.getElementById("breathing-proceed-btn");
 if (proceedBreathingBtn) {
   proceedBreathingBtn.addEventListener("click", () => {
@@ -376,13 +371,17 @@ if (proceedBreathingBtn) {
   });
 }
 
-document.getElementById("home-btn").addEventListener("click", () => showScreen("type"));
-document.getElementById("flow-home").addEventListener("click", () => showScreen("type"));
+document.getElementById("home-btn").addEventListener("click", () => {
+  sessionHeading.textContent = sessionScreenHeading;
+  showScreen("session");
+});
+document.getElementById("flow-home").addEventListener("click", () => {
+  sessionHeading.textContent = sessionScreenHeading;
+  showScreen("session");
+});
 document.getElementById("cancel-flow").addEventListener("click", () => endFlowSession(false));
 
-document.getElementById("notes-toggle").addEventListener("click", () => openPanel(notesPanel));
 document.getElementById("session-notes-toggle").addEventListener("click", () => openPanel(notesPanel));
-document.getElementById("settings-toggle").addEventListener("click", () => openPanel(settingsPanel));
 document.getElementById("session-settings-toggle").addEventListener("click", () => openPanel(settingsPanel));
 document.getElementById("close-settings").addEventListener("click", () => closePanel(settingsPanel));
 document.getElementById("close-notes").addEventListener("click", () => closePanel(notesPanel));

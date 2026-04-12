@@ -495,3 +495,83 @@ a {
   border-color: var(--accent-color);
   color: var(--accent-color);
 }
+
+/* --- QUICK START PRESET MECHANICS --- */
+.preset-header {
+  align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.action-btn {
+  background: var(--accent-color);
+  color: #000;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-family: var(--font-family);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+}
+
+.action-btn.outline-btn {
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--panel-border);
+}
+
+.action-btn.outline-btn:hover {
+  border-color: var(--text-main);
+  box-shadow: none;
+}
+
+.action-btn.active-mode {
+  background: #ffb347;
+  color: #000;
+  border-color: #ffb347;
+}
+
+.edit-action-row {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.btn-edit, .btn-danger {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  padding: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-weight: 600;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.btn-edit:hover {
+  border-color: #18c2ff;
+  color: #18c2ff;
+}
+
+.btn-danger:hover {
+  border-color: #ff4d4d;
+  color: #ff4d4d;
+}
+
+.form-modal {
+  max-width: 500px;
+}

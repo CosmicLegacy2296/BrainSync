@@ -45,6 +45,9 @@ class FocusEngine {
     this.maxRiskReached = 0;
     this.mostDistractingTimeElapsed = 0;
     this.lastTabWasHighDopamine = false;
+
+    this.focusSamples = [];
+    this.lastSampleTime = Date.now();
     
     this.reward30 = false;
     this.reward60 = false;
@@ -187,6 +190,12 @@ class FocusEngine {
     this.displayedFocus = this.lerp(this.displayedFocus, this.actualFocus, 0.2);
     this.displayedRisk = this.lerp(this.displayedRisk, this.actualRisk, 0.2);
     
+    // Take a sample of the focus level every 30 seconds for the Overall Score
+    if (now - this.lastSampleTime >= 30000) {
+       this.focusSamples.push(this.actualFocus);
+       this.lastSampleTime = now;
+    }
+
     this.syncStorage();
 
     if (this.actualFocus < 20 && this.session && !this.session.hasBreathed) {
@@ -285,8 +294,14 @@ class FocusEngine {
   }
 
   getEfficiency() {
+    let finalEfficiency = Math.round(this.actualFocus);
+    if (this.focusSamples.length > 0) {
+      const sum = this.focusSamples.reduce((a, b) => a + b, 0);
+      finalEfficiency = Math.round(sum / this.focusSamples.length);
+    }
+
     return {
-       focusEfficiency: Math.round(this.actualFocus),
+       focusEfficiency: finalEfficiency,
        nearDistractions: this.nearDistractions,
        recoveryAttempts: this.recoveryAttempts,
        longestStreak: Math.round(this.longestStreak / 1000),

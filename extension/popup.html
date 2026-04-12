@@ -15,25 +15,12 @@
   <main id="app" class="popup popup-size-large">
     <section id="welcome-screen" class="screen active click-anywhere">
       <div class="welcome-wrap">
+        <img src="logo.png" alt="BrainSync Logo"
+          style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 12px; display: block; margin-left: auto; margin-right: auto;" />
         <span class="eyebrow">BrainSync Focus Companion</span>
         <h1>Welcome to BrainSync</h1>
         <p>Ready to Enter a State of Mental Flow?</p>
         <span class="hint">Click anywhere to continue</span>
-      </div>
-    </section>
-
-    <section id="type-screen" class="screen">
-      <header class="top-bar">
-        <button id="notes-toggle" class="icon-btn" aria-label="Open quick notes">🗒</button>
-        <button id="settings-toggle" class="icon-btn" aria-label="Open settings">⚙</button>
-      </header>
-      <div class="content-wrap">
-        <h2>Please Select Your Session Type:</h2>
-        <div class="type-grid">
-          <button class="type-btn" data-type="School">School</button>
-          <button class="type-btn" data-type="Work">Work</button>
-          <button class="type-btn" data-type="Personal/Other">Personal/Other</button>
-        </div>
       </div>
     </section>
 
@@ -43,7 +30,7 @@
         <button id="session-settings-toggle" class="icon-btn" aria-label="Open settings">⚙</button>
       </header>
       <div class="content-wrap">
-        <h2 id="session-heading">School Session</h2>
+        <h2 id="session-heading">Start Session</h2>
         <form id="session-form">
           <label>
             Session Title
@@ -86,8 +73,11 @@
     </section>
 
     <section id="breathing-screen" class="screen">
-      <div class="content-wrap" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-        <h2 id="breathing-message" style="text-align: center; font-size: 1.1rem; color: #ffeb3b; margin-bottom: 2rem; max-width: 90%; line-height: 1.4;">Your Losing Focus. Breathe To Re-Sync Your Brain</h2>
+      <div class="content-wrap"
+        style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+        <h2 id="breathing-message"
+          style="text-align: center; font-size: 1.1rem; color: #ffeb3b; margin-bottom: 2rem; max-width: 90%; line-height: 1.4;">
+          Your Losing Focus. Breathe To Re-Sync Your Brain</h2>
         <button id="breathing-proceed-btn" class="primary-btn" style="margin-bottom: 20px;">Proceed</button>
         <div id="breathing-circle-wrap" class="breathing-circle-container" style="display: none;">
           <div class="breathing-circle-ripple"></div>
