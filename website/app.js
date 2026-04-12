@@ -152,9 +152,13 @@ const app = {
       card.className = "session-card";
 
       const isPreset = session.type === "preset";
-      const actionButtonHTML = isPreset
-        ? `<button class="session-action" onclick="app.startSessionClick('${session.id}', event)">▶ Start ${session.duration}m Session</button>`
-        : '';
+      const isHistory = session.type === "history";
+      let actionButtonHTML = '';
+      if (isPreset) {
+         actionButtonHTML = `<button class="session-action" onclick="app.startSessionClick('${session.id}', event)">▶ Start ${session.duration}m Session</button>`;
+      } else if (isHistory && session.analytics) {
+         actionButtonHTML = `<button class="btn-show-more" onclick="app.openInsightModal('${session.id}', event)">📊 Show Detailed Insights</button>`;
+      }
 
       card.innerHTML = `
         <div class="session-main">
@@ -201,6 +205,65 @@ const app = {
     }, "*");
 
     alert(`Session started: ${session.title}! Close the website or check your BrainSync popup.`);
+  },
+
+  openInsightModal(sessionId, event) {
+    if (event) event.stopPropagation();
+    const session = this.mockSessions.find(s => s.id === sessionId);
+    if (!session || !session.analytics) return;
+
+    const modal = document.getElementById("insight-modal-overlay");
+    if (!modal) return;
+
+    const eff = session.analytics.focusEfficiency || 0;
+    const peakTimeMs = session.analytics.mostDistractingTimeElapsedMs || 0;
+    const peakMins = Math.max(1, Math.round(peakTimeMs / 60000));
+    const peakText = peakTimeMs > 0 ? `${peakMins} mins into session` : 'Stayed Focused';
+
+    modal.innerHTML = `
+      <div class="insight-modal">
+        <div class="insight-modal-header">
+          <h2>${session.title} Insights</h2>
+          <button class="modal-close-btn" onclick="document.getElementById('insight-modal-overlay').classList.remove('show')">&times;</button>
+        </div>
+        <div class="insight-grid">
+          <div class="donut-chart-container">
+            <div class="donut-chart" style="background: conic-gradient(var(--accent-color) 0% ${eff}%, #111 ${eff}% 100%)">
+              <div class="donut-hole">
+                <div class="donut-hole-text">${eff}%</div>
+                <div class="donut-hole-label">Focus Mastered</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <table class="insight-table">
+              <tr>
+                <td>Session Time</td>
+                <td>${session.duration} min</td>
+              </tr>
+              <tr>
+                <td>Session Objective</td>
+                <td>${session.intent}</td>
+              </tr>
+              <tr>
+                <td>Tab Switches</td>
+                <td>${session.analytics.totalTabSwitches || 0}</td>
+              </tr>
+              <tr>
+                <td>Most Distracting Time</td>
+                <td>${peakText}</td>
+              </tr>
+              <tr>
+                <td>Longest Focus Streak</td>
+                <td>${Math.round((session.analytics.longestStreak || 0) / 60)} min</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    setTimeout(() => modal.classList.add("show"), 10);
   }
 };
 
@@ -215,10 +278,11 @@ window.addEventListener("message", (event) => {
     const extSessions = (event.data.sessions || []).map((s, index) => ({
       id: "ext_" + index,
       title: s.title,
-      duration: s.duration || Math.round((s.endTime - s.startTime) / 60000),
-      intent: s.intent || "Self-guided session",
+      duration: s.duration || s.timeMinutes || Math.round((s.endTime - s.startTime) / 60000) || 0,
+      intent: s.intent || s.objective || "Self-guided session",
       stats: "Completed " + new Date(s.completedAt).toLocaleTimeString(),
-      type: "history"
+      type: "history",
+      analytics: s.analytics || null
     }));
 
     app.mockSessions = app.mockSessions.filter(s => !s.id.startsWith("ext_"));

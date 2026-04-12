@@ -3,12 +3,11 @@ let activeSessionActive = false;
 let isBreathingSequenceActive = false;
 let engine = null;
 
-const UTILITY_DOMAINS = ["google.com", "docs.google.com", "stackoverflow.com", "calculator.net", "wikipedia.org"];
-const BAD_DOMAINS = ["youtube.com", "facebook.com", "instagram.com", "reddit.com", "netflix.com", "tiktok.com", "twitter.com", "x.com", "pinterest.com", "twitch.tv", "spotify.com"];
+const BAD_DOMAINS = ["youtube.com", "facebook.com", "instagram.com", "reddit.com", "netflix.com", "tiktok.com", "twitter.com", "x.com", "pinterest.com", "twitch.tv", "spotify.com", "roblox.com"];
 
 function extractKeywords(text) {
   const words = text.toLowerCase().split(/\W+/).filter(w => w.length > 3);
-  const stopWords = ["this", "that", "with", "from", "your", "have", "complete", "finish", "start", "doing", "some", "work", "session"];
+  const stopWords = ["this", "that", "with", "from", "your", "have", "complete", "finish", "start", "doing", "some", "work", "session", "learn", "read", "study", "research", "find", "make", "take", "look", "what", "where", "when", "why", "who", "about", "like", "just", "into", "over", "only", "also"];
   return words.filter(w => !stopWords.includes(w));
 }
 
@@ -28,10 +27,12 @@ async function fetchSemanticKeywords(objective) {
 class FocusEngine {
   constructor(session) {
     this.session = session;
+    this.sessionStartTime = session.startTime || Date.now();
     this.active = true;
     
     this.actualFocus = 100;
     this.displayedFocus = 100;
+    this.maxPossibleFocus = 100;
     this.actualRisk = 0;
     this.displayedRisk = 0;
     
@@ -41,6 +42,8 @@ class FocusEngine {
     this.nearDistractions = 0;
     this.recoveryAttempts = 0;
     this.longestStreak = 0;
+    this.maxRiskReached = 0;
+    this.mostDistractingTimeElapsed = 0;
     this.lastTabWasHighDopamine = false;
     
     this.reward30 = false;
@@ -48,6 +51,7 @@ class FocusEngine {
     this.reward120 = false;
     this.wasHighRisk = false;
     this.resetApplied = false;
+    this.currentTabType = "neutral";
 
     this.lastTickTime = Date.now();
     this.lastTabSwitchTime = Date.now();
@@ -85,18 +89,34 @@ class FocusEngine {
 
   applyReward(baseReward) {
     const factor = this.lerp(1.5, 0.7, this.normalizedTime);
-    this.actualFocus = Math.min(100, this.actualFocus + baseReward * factor);
+    this.actualFocus = Math.min(this.maxPossibleFocus, this.actualFocus + baseReward * factor);
   }
 
   applyPenalty(basePenalty) {
     const factor = this.lerp(0.8, 1.5, this.normalizedTime);
-    this.actualFocus = Math.max(0, this.actualFocus - basePenalty * factor * this.getMultiplier());
+    const drop = basePenalty * factor * this.getMultiplier();
+    
+    if (drop > 0) {
+      this.maxPossibleFocus = Math.max(85, this.maxPossibleFocus - (drop / 2));
+    }
+    
+    this.actualFocus = Math.max(0, this.actualFocus - drop);
+
+    if (drop >= 10) {
+      this.displayedFocus = this.actualFocus; // VISUALLY INSTANT DROP
+      this.syncStorage(); // Force immediate UI update globally
+    }
   }
 
   addRisk(amount) {
     const factor = this.lerp(0.8, 1.5, this.normalizedTime);
     const finalAmt = amount * factor * this.getMultiplier();
     this.actualRisk = Math.min(100, this.actualRisk + finalAmt);
+
+    if (this.actualRisk > this.maxRiskReached) {
+        this.maxRiskReached = this.actualRisk;
+        this.mostDistractingTimeElapsed = Date.now() - this.sessionStartTime;
+    }
 
     if (this.actualRisk > 70 && !this.wasHighRisk) {
          this.nearDistractions++;
@@ -135,12 +155,24 @@ class FocusEngine {
     const deltaTime = now - this.lastTickTime;
     this.lastTickTime = now;
 
-    this.focusStreakTime += deltaTime;
-    this.longestStreak = Math.max(this.longestStreak, this.focusStreakTime);
+    if (this.currentTabType === "relevant") {
+      this.focusStreakTime += deltaTime;
+      this.longestStreak = Math.max(this.longestStreak, this.focusStreakTime);
 
-    if (this.focusStreakTime > 30000 && !this.reward30) { this.applyReward(2); this.reward30 = true; }
-    if (this.focusStreakTime > 60000 && !this.reward60) { this.applyReward(5); this.reward60 = true; }
-    if (this.focusStreakTime > 120000 && !this.reward120) { this.applyReward(10); this.reward120 = true; }
+      // Continuous steady increase for presentation purposes (+1 focus per 2 seconds)
+      this.applyReward(0.5 * (deltaTime / 1000));
+
+      // Accelerated milestone rewards
+      if (this.focusStreakTime > 15000 && !this.reward30) { this.applyReward(3); this.reward30 = true; }
+      if (this.focusStreakTime > 30000 && !this.reward60) { this.applyReward(6); this.reward60 = true; }
+      if (this.focusStreakTime > 60000 && !this.reward120) { this.applyReward(12); this.reward120 = true; }
+    } else if (this.currentTabType === "irrelevant") {
+      this.applyPenalty(0.5 * (deltaTime / 1000)); // -1 per 2 seconds
+      this.addRisk(0.5 * (deltaTime / 1000));
+    } else if (this.currentTabType === "high_distraction") {
+      this.applyPenalty(1.5 * (deltaTime / 1000)); // -3 per 2 seconds
+      this.addRisk(2.0 * (deltaTime / 1000));
+    }
 
     let sessionRemaining = this.session.endTime - now;
     if (this.session.isPaused) sessionRemaining = this.session.remainingMs;
@@ -174,32 +206,42 @@ class FocusEngine {
       this.reward30 = false;
       this.reward60 = false;
       this.reward120 = false;
+      this.currentTabType = "pending";
     }
 
     if (!tab || !tab.url || tab.url.startsWith("chrome")) {
       this.applyPenalty(wasQuickSwitch ? 5 : 1);
       this.addRisk(wasQuickSwitch ? 10 : 2);
+      this.currentTabType = "irrelevant";
       return;
     }
 
     let isHighDopamine = false;
-    let isUtility = false;
+    let isHomepage = false;
     try {
       const urlObj = new URL(tab.url);
       isHighDopamine = BAD_DOMAINS.some(d => urlObj.hostname.includes(d));
-      isUtility = UTILITY_DOMAINS.some(d => urlObj.hostname.includes(d));
+      if (urlObj.pathname === "/" || urlObj.pathname === "") {
+        isHomepage = true;
+      }
     } catch(e) {}
 
     if (!isCompleteUpdate) {
        if (this.lastTabWasHighDopamine && timeOnTab < 10000) {
-          this.actualFocus = Math.min(100, this.actualFocus + 5);
+          this.actualFocus = Math.min(this.maxPossibleFocus, this.actualFocus + 5);
           this.actualRisk = Math.max(0, this.actualRisk - 10);
        }
        this.lastTabWasHighDopamine = isHighDopamine;
     }
 
+    // Instantly penalize high dopamine homepages without checking for stray match keywords
+    if (isHighDopamine && isHomepage) {
+       this.applyClassification(wasQuickSwitch, isHighDopamine, false);
+       return;
+    }
+
     if (currentObjectiveKeywords.length === 0) {
-      this.applyClassification(wasQuickSwitch, isHighDopamine, isUtility, false);
+      this.applyClassification(wasQuickSwitch, isHighDopamine, false);
       return;
     }
 
@@ -208,37 +250,37 @@ class FocusEngine {
       keywords: currentObjectiveKeywords
     }, (response) => {
       if (chrome.runtime.lastError) {
-         this.applyClassification(wasQuickSwitch, isHighDopamine, isUtility, false);
+         this.applyClassification(wasQuickSwitch, isHighDopamine, false);
          return;
       }
-      this.applyClassification(wasQuickSwitch, isHighDopamine, isUtility, response && response.match === true);
+      this.applyClassification(wasQuickSwitch, isHighDopamine, response && response.match === true);
     });
   }
 
-  applyClassification(wasQuickSwitch, isHighDopamine, isUtility, isMatch) {
+  applyClassification(wasQuickSwitch, isHighDopamine, isMatch) {
     let type = "irrelevant";
     let conf = 0.7;
 
     if (isMatch) { type = "relevant"; conf = 1.0; }
     else if (isHighDopamine) { type = "high_distraction"; conf = 0.9; }
-    else if (isUtility) { type = "neutral"; conf = 0.6; }
+
+    this.currentTabType = type;
+
+    // Enforce 1-2% universal penalty for rapid page thrashing within 0-5s
+    if (wasQuickSwitch) {
+       this.peekCount++;
+       this.applyPenalty(1.5); 
+       this.addRisk(5);
+    }
 
     if (type === "relevant") {
-       // do nothing
-    } else if (type === "neutral") {
-       if (wasQuickSwitch) {
-         this.peekCount++;
-         this.addRisk(5 * conf);
-         this.applyPenalty(2 * conf);
-       }
+       // do nothing additional
     } else if (type === "irrelevant") {
-       this.applyPenalty((wasQuickSwitch ? 5 : 2) * conf);
-       this.addRisk((wasQuickSwitch ? 10 : 5) * conf);
-       if (wasQuickSwitch) this.peekCount++;
+       this.applyPenalty(2 * conf);
+       this.addRisk(5 * conf);
     } else if (type === "high_distraction") {
        this.applyPenalty(15 * conf);
        this.addRisk(20 * conf);
-       if (wasQuickSwitch) this.peekCount++;
     }
   }
 
@@ -247,7 +289,9 @@ class FocusEngine {
        focusEfficiency: Math.round(this.actualFocus),
        nearDistractions: this.nearDistractions,
        recoveryAttempts: this.recoveryAttempts,
-       longestStreak: Math.round(this.longestStreak / 1000) 
+       longestStreak: Math.round(this.longestStreak / 1000),
+       totalTabSwitches: this.peekCount,
+       mostDistractingTimeElapsedMs: this.mostDistractingTimeElapsed
     };
   }
 }
