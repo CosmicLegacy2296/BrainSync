@@ -13,6 +13,33 @@
   <div class="bg-orb orb-b"></div>
   <div class="noise-layer"></div>
   <main id="app" class="popup popup-size-large">
+    <section id="login-screen" class="screen">
+      <div class="content-wrap">
+        <img src="logo.png" alt="BrainSync Logo"
+          style="width: 65px; height: 65px; margin-bottom: 15px; border-radius: 10px; display: block; margin-left: auto; margin-right: auto;" />
+        <span class="eyebrow">Authentication Required</span>
+        <h2>Log in to BrainSync</h2>
+        <p class="subtle" style="margin-bottom: 18px;">Please enter your credentials to start focusing</p>
+        <form id="popup-login-form" style="width: 100%; max-width: 320px;">
+          <label>
+            Username
+            <input id="popup-username" type="text" required placeholder="e.g. user1" />
+          </label>
+          <label>
+            Password
+            <input id="popup-password" type="password" required placeholder="••••••••" />
+          </label>
+          <div id="popup-login-error" style="color: #ff4d4d; font-size: 0.85rem; display: none; margin-bottom: 10px; text-align: left;"></div>
+          <div class="actions" style="margin-top: 10px; width: 100%;">
+            <button type="submit" class="primary-btn" style="width: 100%;">Log In</button>
+          </div>
+          <div style="margin-top: 15px; text-align: center;">
+            <a href="#" id="openWebsiteLogin" class="hint" style="font-size: 0.8rem; text-decoration: underline; color: var(--accent);">Or log in via Website</a>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <section id="welcome-screen" class="screen active click-anywhere">
       <div class="welcome-wrap">
         <img src="logo.png" alt="BrainSync Logo"

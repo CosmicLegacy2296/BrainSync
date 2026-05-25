@@ -1,5 +1,6 @@
 const app = document.getElementById("app");
 const screens = {
+  login: document.getElementById("login-screen"),
   welcome: document.getElementById("welcome-screen"),
   session: document.getElementById("session-screen"),
   flow: document.getElementById("flow-screen"),
@@ -285,6 +286,9 @@ function handleBreathingState(data) {
 if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
+      if (changes.brainsyncUser) {
+        window.location.reload();
+      }
       if (changes.brainsyncFocusLevel) {
         updateFocusMeter(changes.brainsyncFocusLevel.newValue);
       }
@@ -307,8 +311,19 @@ if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
 }
 
 async function init() {
+  const currentUser = await storage.get("brainsyncUser", null);
+  if (!currentUser) {
+    showScreen("login");
+    document.getElementById("session-settings-toggle").style.display = "none";
+    document.getElementById("session-notes-toggle").style.display = "none";
+    return;
+  }
+
+  document.getElementById("session-settings-toggle").style.display = "block";
+  document.getElementById("session-notes-toggle").style.display = "block";
+
   const settings = await storage.get("brainsyncSettings", defaultSettings);
-  const notes = await storage.get("brainsyncQuickNotes", "");
+  const notes = await storage.get(`brainsyncQuickNotes_${currentUser}`, "");
 
   popupSizeSelect.value = settings.popupSize || defaultSettings.popupSize;
   alarmSoundSelect.value = settings.alarmSound || defaultSettings.alarmSound;
@@ -387,8 +402,11 @@ document.getElementById("close-settings").addEventListener("click", () => closeP
 document.getElementById("close-notes").addEventListener("click", () => closePanel(notesPanel));
 
 document.getElementById("save-notes").addEventListener("click", async () => {
-  await storage.set("brainsyncQuickNotes", quickNotesInput.value);
-  showToast("Notes saved.");
+  const currentUser = await storage.get("brainsyncUser", null);
+  if (currentUser) {
+    await storage.set(`brainsyncQuickNotes_${currentUser}`, quickNotesInput.value);
+    showToast("Notes saved.");
+  }
 });
 
 [popupSizeSelect, alarmSoundSelect, alarmVolumeInput, smallTimerSelect].forEach((input) => {
@@ -422,5 +440,46 @@ sessionForm.addEventListener("submit", async (event) => {
   await storage.set("brainsyncFocusLevel", 100);
   updateFocusMeter(100);
 });
+
+// Popup Login Form handler
+const popupLoginForm = document.getElementById("popup-login-form");
+if (popupLoginForm) {
+  popupLoginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const user = document.getElementById("popup-username").value.trim();
+    const pass = document.getElementById("popup-password").value.trim();
+    const errorEl = document.getElementById("popup-login-error");
+
+    try {
+      const res = await fetch("http://localhost:3000/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        errorEl.style.display = "none";
+        await storage.set("brainsyncUser", data.username);
+        window.location.reload();
+      } else {
+        errorEl.style.display = "block";
+        errorEl.textContent = "Invalid username or password.";
+      }
+    } catch (err) {
+      errorEl.style.display = "block";
+      errorEl.textContent = "Cannot connect to server. Ensure it is running.";
+    }
+  });
+}
+
+const openWebsiteLoginBtn = document.getElementById("openWebsiteLogin");
+if (openWebsiteLoginBtn) {
+  openWebsiteLoginBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (typeof chrome !== "undefined" && chrome.tabs) {
+      chrome.tabs.create({ url: "http://localhost:3000/" });
+    }
+  });
+}
 
 init();

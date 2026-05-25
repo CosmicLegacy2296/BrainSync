@@ -403,7 +403,7 @@ async function playAudioOffscreen(settings) {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "sessionEnd") {
-    const data = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions"]);
+    const data = await chrome.storage.local.get(["brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", "brainsyncUser"]);
     if (!data.brainsyncActiveSession || !data.brainsyncActiveSession.isActive) return;
 
     const sessions = data.brainsyncSessions || [];
@@ -426,6 +426,18 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
        brainsyncSessions: sessions,
        brainsyncActiveSession: null
     });
+
+    if (data.brainsyncUser) {
+      try {
+        await fetch("http://localhost:3000/api/insights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: data.brainsyncUser, session: completedSession })
+        });
+      } catch(e) {
+        console.error("Failed to sync completed session to server", e);
+      }
+    }
 
     chrome.notifications.create({
       type: "basic",

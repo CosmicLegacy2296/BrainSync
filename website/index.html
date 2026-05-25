@@ -20,8 +20,22 @@
         <a href="#home" data-route="home" class="nav-link active">Home</a>
         <a href="#quickstart" data-route="quickstart" class="nav-link">Quick Start</a>
         <a href="#insights" data-route="insights" class="nav-link">Insights</a>
+        <div id="authContainer" class="auth-container" style="display: flex; align-items: center; margin-left: 20px;"></div>
       </div>
     </nav>
+
+    <!-- Login Wall (Shows when not logged in) -->
+    <section id="loginWall" class="login-wall" style="display: none; text-align: center; max-width: 400px; margin: 80px auto; padding: 40px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
+        <div style="font-size: 3.5rem; margin-bottom: 15px;">🔐</div>
+        <h2 style="margin-bottom: 20px; font-weight: 800; color: var(--accent-color);">Login Required</h2>
+        <p style="color: var(--text-muted); margin-bottom: 30px; font-size: 0.95rem;">Please enter your credentials to access your personalized presets and focus insights.</p>
+        <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
+            <input type="text" id="usernameInput" placeholder="Username (user1 or user2)" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
+            <input type="password" id="passwordInput" placeholder="Password (pass1 or pass2)" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
+            <div id="loginError" style="color: #ff4d4d; font-size: 0.9rem; display: none;">Invalid username or password.</div>
+            <button type="submit" class="btn-primary" style="margin-top: 10px;">Login</button>
+        </form>
+    </section>
 
     <!-- Main Content Area -->
     <main id="app-content">

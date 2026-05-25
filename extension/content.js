@@ -138,6 +138,16 @@ window.addEventListener("message", (event) => {
         brainsyncSessions: [],
         brainsyncActiveSession: null
       });
+    } else if (event.data.action === "LOGIN") {
+      chrome.storage.local.set({ 
+        brainsyncUser: event.data.userId
+      });
+    } else if (event.data.action === "LOGOUT") {
+      chrome.storage.local.set({ 
+        brainsyncUser: null,
+        brainsyncSessions: [],
+        brainsyncActiveSession: null
+      });
     }
   }
 });

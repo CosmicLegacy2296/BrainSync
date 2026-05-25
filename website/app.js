@@ -31,23 +31,78 @@ const app = {
     `
   },
 
+  currentUser: null,
   isEditingPresets: false,
   mockSessions: [],
 
-  loadPresets() {
-    let saved = localStorage.getItem("brainsync_presets");
-    if (saved) {
-       this.mockSessions = this.mockSessions.filter(s => s.type !== "preset");
-       this.mockSessions.push(...JSON.parse(saved));
-    } else {
-       const defaults = [
-         { id: "preset_1", title: "Deep Meditation", duration: 5, intent: "Relax and rejuvenate", stats: "Quick Start Preset", type: "preset" },
-         { id: "preset_2", title: "Deep Focus Work", duration: 25, intent: "Maximum productivity and flow state", stats: "Quick Start Preset", type: "preset" },
-         { id: "preset_3", title: "Light Reading", duration: 15, intent: "Read an article or a chapter", stats: "Quick Start Preset", type: "preset" }
-       ];
-       this.mockSessions.push(...defaults);
-       localStorage.setItem("brainsync_presets", JSON.stringify(defaults));
+  async loadPresets() {
+    if (!this.currentUser) return;
+    try {
+      const res = await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`);
+      if (res.ok) {
+        const data = await res.json();
+        this.mockSessions = this.mockSessions.filter(s => s.type !== "preset");
+        this.mockSessions.push(...data);
+      }
+    } catch (e) {
+      console.error("Failed to load presets from server", e);
     }
+  },
+
+  async loadInsights() {
+    if (!this.currentUser) return;
+    try {
+      const res = await fetch(`/api/insights?username=${encodeURIComponent(this.currentUser)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const extSessions = data.map((s, index) => ({
+          id: "ext_" + index,
+          title: s.title,
+          duration: s.duration || s.timeMinutes || Math.round((s.endTime - s.startTime) / 60000) || 0,
+          intent: s.intent || s.objective || "Self-guided session",
+          stats: "Completed " + new Date(s.completedAt).toLocaleTimeString(),
+          type: "history",
+          analytics: s.analytics || null
+        }));
+        this.mockSessions = this.mockSessions.filter(s => s.type !== "history");
+        this.mockSessions.push(...extSessions);
+      }
+    } catch (e) {
+      console.error("Failed to load insights from server", e);
+    }
+  },
+
+  renderAuthUI() {
+    const authContainer = document.getElementById("authContainer");
+    const loginWall = document.getElementById("loginWall");
+    const contentArea = document.getElementById("app-content");
+
+    if (this.currentUser) {
+      if (loginWall) loginWall.style.display = "none";
+      if (contentArea) contentArea.style.display = "flex";
+      if (authContainer) {
+        authContainer.innerHTML = `
+          <span style="margin-right: 15px; font-weight: bold; color: var(--accent-color);">Logged in as ${this.currentUser}</span>
+          <button class="action-btn outline-btn" id="logoutBtn" style="padding: 4px 10px; font-size: 0.85rem;">Logout</button>
+        `;
+        document.getElementById("logoutBtn").addEventListener("click", () => this.logout());
+      }
+    } else {
+      if (loginWall) loginWall.style.display = "block";
+      if (contentArea) contentArea.style.display = "none";
+      if (authContainer) authContainer.innerHTML = "";
+    }
+  },
+
+  logout() {
+    this.currentUser = null;
+    localStorage.removeItem("brainsyncUser");
+    window.postMessage({
+      type: "FROM_BRAINSYNC_WEB",
+      action: "LOGOUT"
+    }, "*");
+    this.renderAuthUI();
+    this.navigate("home");
   },
 
   async init() {
@@ -55,7 +110,55 @@ const app = {
     this.navLinks = document.querySelectorAll(".nav-link");
     this.navBrand = document.querySelector(".nav-brand");
 
-    this.loadPresets();
+    this.currentUser = localStorage.getItem("brainsyncUser");
+    this.renderAuthUI();
+
+    if (this.currentUser) {
+      window.postMessage({
+        type: "FROM_BRAINSYNC_WEB",
+        action: "LOGIN",
+        userId: this.currentUser
+      }, "*");
+    }
+
+    const loginForm = document.getElementById("loginForm");
+    if (loginForm) {
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const user = document.getElementById("usernameInput").value.trim();
+        const pass = document.getElementById("passwordInput").value.trim();
+        const errorEl = document.getElementById("loginError");
+
+        try {
+          const res = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: user, password: pass })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            errorEl.style.display = "none";
+            this.currentUser = data.username;
+            localStorage.setItem("brainsyncUser", data.username);
+            
+            window.postMessage({
+              type: "FROM_BRAINSYNC_WEB",
+              action: "LOGIN",
+              userId: data.username
+            }, "*");
+
+            this.renderAuthUI();
+            this.navigate("home");
+          } else {
+            errorEl.style.display = "block";
+            errorEl.textContent = "Invalid username or password.";
+          }
+        } catch (err) {
+          errorEl.style.display = "block";
+          errorEl.textContent = "Network error. Please try again.";
+        }
+      });
+    }
 
     try {
       const res = await fetch("/api/startup-id");
@@ -89,7 +192,7 @@ const app = {
     this.navigate(initialRoute);
   },
 
-  navigate(route) {
+  async navigate(route) {
     if (!this.views[route]) route = 'home';
 
     window.location.hash = route;
@@ -102,13 +205,19 @@ const app = {
       }
     });
 
-    this.contentArea.innerHTML =
-      `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
-
     if (route === 'quickstart') {
+      await this.loadPresets();
+      this.contentArea.innerHTML =
+        `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
       this.renderList('quickstart');
     } else if (route === 'insights') {
+      await this.loadInsights();
+      this.contentArea.innerHTML =
+        `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
       this.renderList('insights');
+    } else {
+      this.contentArea.innerHTML =
+        `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
     }
   },
 
@@ -295,13 +404,21 @@ const app = {
     setTimeout(() => modal.classList.add("show"), 10);
   },
 
-  savePreset(event, id) {
+  async savePreset(event, id) {
     event.preventDefault();
     const title = document.getElementById("p-title").value.trim();
     const intent = document.getElementById("p-intent").value.trim();
     const duration = parseInt(document.getElementById("p-time").value);
 
-    let saved = JSON.parse(localStorage.getItem("brainsync_presets") || "[]");
+    let saved = [];
+    try {
+      const res = await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`);
+      if (res.ok) {
+        saved = await res.json();
+      }
+    } catch (e) {
+      console.error("Failed to fetch presets for saving", e);
+    }
 
     if (id) {
        let index = saved.findIndex(s => s.id === id);
@@ -322,22 +439,49 @@ const app = {
        saved.push(newPreset);
     }
 
-    localStorage.setItem("brainsync_presets", JSON.stringify(saved));
+    try {
+      await fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: this.currentUser, presets: saved })
+      });
+    } catch (e) {
+      console.error("Failed to save presets to server", e);
+    }
+
     document.getElementById('preset-modal-overlay').classList.remove('show');
     
-    this.loadPresets();
+    await this.loadPresets();
     this.renderList("quickstart");
   },
 
-  deletePreset(id, event) {
+  async deletePreset(id, event) {
     if (event) event.stopPropagation();
     if (!confirm("Are you sure you want to delete this preset?")) return;
 
-    let saved = JSON.parse(localStorage.getItem("brainsync_presets") || "[]");
-    saved = saved.filter(s => s.id !== id);
-    localStorage.setItem("brainsync_presets", JSON.stringify(saved));
+    let saved = [];
+    try {
+      const res = await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`);
+      if (res.ok) {
+        saved = await res.json();
+      }
+    } catch (e) {
+      console.error("Failed to fetch presets for deletion", e);
+    }
 
-    this.mockSessions = this.mockSessions.filter(s => s.id !== id);
+    saved = saved.filter(s => s.id !== id);
+
+    try {
+      await fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: this.currentUser, presets: saved })
+      });
+    } catch (e) {
+      console.error("Failed to delete preset from server", e);
+    }
+
+    await this.loadPresets();
     this.renderList("quickstart");
   }
 };
@@ -363,6 +507,6 @@ window.addEventListener("message", (event) => {
     app.mockSessions = app.mockSessions.filter(s => !s.id.startsWith("ext_"));
     app.mockSessions.push(...extSessions);
 
-    if (window.location.hash === "#insights") app.navigate('insights');
+    if (window.location.hash === "#insights") app.renderList('insights');
   }
 });
