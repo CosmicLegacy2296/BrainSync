@@ -1,6 +1,9 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const { createAccount, loginWithPassword, AuthInputError, AuthConflictError } = require('./lib/server/auth-db');
 
 const PORT = process.env.PORT || 3000;
 
@@ -62,15 +65,42 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.url === "/api/login" && req.method === "POST") {
-    const { username, password } = await getBody(req);
-    const isValid = (username === "user1" && password === "pass1") || (username === "user2" && password === "pass2");
-    if (isValid) {
+    try {
+      const { username, password } = await getBody(req);
+      const account = await loginWithPassword({ username, password });
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: true, username }));
-    } else {
-      res.writeHead(401, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: false, error: "Invalid username or password" }));
+      return res.end(JSON.stringify({ success: true, username: account.name }));
+    } catch (err) {
+      if (err instanceof AuthInputError) {
+        res.writeHead(err.status, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+      console.error('Login error:', err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: false, error: "Server error" }));
     }
+  }
+
+  if (req.url === "/api/signup" && req.method === "POST") {
+    try {
+      const { username, password } = await getBody(req);
+      const account = await createAccount({ username, password });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: true, username: account.name }));
+    } catch (err) {
+      if (err instanceof AuthInputError || err instanceof AuthConflictError) {
+        res.writeHead(err.status, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+      console.error('Signup error:', err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: false, error: "Server error" }));
+    }
+  }
+
+  if (req.url === "/api/logout" && req.method === "POST") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ success: true }));
   }
 
   if (req.url.startsWith("/api/presets")) {
@@ -174,7 +204,20 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`BrainSync website running at http://localhost:${PORT}`);
-});
+async function start() {
+  try {
+    const { dbQuery } = require('./lib/server/db');
+    await dbQuery('SELECT 1');
+    console.log('Database connected');
+
+    server.listen(PORT, () => {
+      console.log(`BrainSync website running at http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err.message);
+    process.exit(1);
+  }
+}
+
+start();
 
