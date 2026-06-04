@@ -66,11 +66,12 @@ async function createAccount(input) {
   const password_hash = hashPassword(password);
 
   try {
+    const email = `${username}@brainsync.local`;
     const result = await dbQuery(
       `INSERT INTO accounts (username, email, password_hash, display_name, role, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING username, email`,
-      [username, username, password_hash, username, 'user', true]
+      [username, email, password_hash, username, 'user', true]
     );
 
     return result.rows[0];
