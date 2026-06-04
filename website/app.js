@@ -188,6 +188,7 @@ const app = {
       signupForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const user = document.getElementById("signupUsernameInput").value.trim();
+        const email = document.getElementById("signupEmailInput").value.trim();
         const pass = document.getElementById("signupPasswordInput").value.trim();
         const confirmPass = document.getElementById("signupConfirmPasswordInput").value.trim();
         const errorEl = document.getElementById("signupError");
@@ -208,7 +209,7 @@ const app = {
           const res = await fetch("/api/signup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: user, password: pass })
+            body: JSON.stringify({ username: user, email: email, password: pass })
           });
           if (res.ok) {
             const data = await res.json();
