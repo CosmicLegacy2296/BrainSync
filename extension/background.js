@@ -448,6 +448,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
     chrome.runtime.sendMessage({ action: "play_alarm" }).catch(() => {});
     playAudioOffscreen(data.brainsyncSettings || {});
+
+    // Redirect existing website tab or open a new one to show the insights page
+    chrome.tabs.query({}, (tabs) => {
+      let foundTab = false;
+      for (const tab of tabs) {
+        if (tab.url && (tab.url.startsWith("http://localhost:3000") || tab.url.includes("127.0.0.1:3000"))) {
+          chrome.tabs.update(tab.id, { url: "http://localhost:3000/#insights", active: true });
+          foundTab = true;
+          break;
+        }
+      }
+      if (!foundTab) {
+        chrome.tabs.create({ url: "http://localhost:3000/#insights" });
+      }
+    });
   }
 });
 

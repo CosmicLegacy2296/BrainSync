@@ -269,6 +269,14 @@ const server = http.createServer(async (req, res) => {
           analytics: session.analytics
         });
 
+        if (session.presetId) {
+          try {
+            await deletePreset(session.presetId, userId);
+          } catch (deleteErr) {
+            console.error(`Failed to delete preset ${session.presetId} on session completion:`, deleteErr);
+          }
+        }
+
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ success: true }));
       }

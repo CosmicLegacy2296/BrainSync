@@ -288,6 +288,7 @@ const app = {
       this.renderList('quickstart');
     } else if (route === 'insights') {
       await this.loadInsights();
+      await this.loadPresets();
       this.contentArea.innerHTML =
         `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
       this.renderList('insights');
@@ -365,7 +366,8 @@ const app = {
       duration: session.duration,
       startTime: Date.now(),
       endTime: Date.now() + durationMs,
-      isActive: true
+      isActive: true,
+      presetId: session.preset_id || null
     };
 
     window.postMessage({
@@ -563,9 +565,25 @@ const app = {
 };
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => app.init());
+  document.addEventListener("DOMContentLoaded", () => {
+    app.init();
+    window.addEventListener("hashchange", () => {
+      const route = window.location.hash.replace('#', '') || 'home';
+      const activeView = document.querySelector(".view.active-view");
+      if (!activeView || activeView.id !== `view-${route}`) {
+        app.navigate(route);
+      }
+    });
+  });
 } else {
   app.init();
+  window.addEventListener("hashchange", () => {
+    const route = window.location.hash.replace('#', '') || 'home';
+    const activeView = document.querySelector(".view.active-view");
+    if (!activeView || activeView.id !== `view-${route}`) {
+      app.navigate(route);
+    }
+  });
 }
 
 window.addEventListener("message", (event) => {
