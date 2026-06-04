@@ -27,13 +27,30 @@
     <!-- Login Wall (Shows when not logged in) -->
     <section id="loginWall" class="login-wall" style="display: none; text-align: center; max-width: 400px; margin: 80px auto; padding: 40px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
         <div style="font-size: 3.5rem; margin-bottom: 15px;">🔐</div>
-        <h2 style="margin-bottom: 20px; font-weight: 800; color: var(--accent-color);">Login Required</h2>
-        <p style="color: var(--text-muted); margin-bottom: 30px; font-size: 0.95rem;">Please enter your credentials to access your personalized presets and focus insights.</p>
+        <h2 id="authTitle" style="margin-bottom: 20px; font-weight: 800; color: var(--accent-color);">Login Required</h2>
+        <p id="authSubtitle" style="color: var(--text-muted); margin-bottom: 30px; font-size: 0.95rem;">Please enter your credentials to access your personalized presets and focus insights.</p>
+
+        <!-- Login Form -->
         <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
             <input type="text" id="usernameInput" placeholder="Username" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
             <input type="password" id="passwordInput" placeholder="Password" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
             <div id="loginError" style="color: #ff4d4d; font-size: 0.9rem; display: none;">Invalid username or password.</div>
             <button type="submit" class="btn-primary" style="margin-top: 10px;">Login</button>
+            <div style="margin-top: 15px; color: var(--text-muted);">
+                Don't have an account? <button type="button" id="toggleSignup" style="background: none; border: none; color: var(--accent-color); cursor: pointer; text-decoration: underline; font-weight: 600;">Create one</button>
+            </div>
+        </form>
+
+        <!-- Signup Form -->
+        <form id="signupForm" style="display: none; flex-direction: column; gap: 15px;">
+            <input type="text" id="signupUsernameInput" placeholder="Username (3+ characters)" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
+            <input type="password" id="signupPasswordInput" placeholder="Password" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
+            <input type="password" id="signupConfirmPasswordInput" placeholder="Confirm Password" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
+            <div id="signupError" style="color: #ff4d4d; font-size: 0.9rem; display: none;"></div>
+            <button type="submit" class="btn-primary" style="margin-top: 10px;">Create Account</button>
+            <div style="margin-top: 15px; color: var(--text-muted);">
+                Already have an account? <button type="button" id="toggleLogin" style="background: none; border: none; color: var(--accent-color); cursor: pointer; text-decoration: underline; font-weight: 600;">Login</button>
+            </div>
         </form>
     </section>
 

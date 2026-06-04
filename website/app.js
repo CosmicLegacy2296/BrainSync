@@ -122,6 +122,30 @@ const app = {
     }
 
     const loginForm = document.getElementById("loginForm");
+    const signupForm = document.getElementById("signupForm");
+    const toggleSignupBtn = document.getElementById("toggleSignup");
+    const toggleLoginBtn = document.getElementById("toggleLogin");
+
+    if (toggleSignupBtn) {
+      toggleSignupBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        loginForm.style.display = "none";
+        signupForm.style.display = "flex";
+        document.getElementById("authTitle").textContent = "Create Account";
+        document.getElementById("authSubtitle").textContent = "Join BrainSync and start your focused work sessions.";
+      });
+    }
+
+    if (toggleLoginBtn) {
+      toggleLoginBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        signupForm.style.display = "none";
+        loginForm.style.display = "flex";
+        document.getElementById("authTitle").textContent = "Login Required";
+        document.getElementById("authSubtitle").textContent = "Please enter your credentials to access your personalized presets and focus insights.";
+      });
+    }
+
     if (loginForm) {
       loginForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -140,7 +164,7 @@ const app = {
             errorEl.style.display = "none";
             this.currentUser = data.username;
             localStorage.setItem("brainsyncUser", data.username);
-            
+
             window.postMessage({
               type: "FROM_BRAINSYNC_WEB",
               action: "LOGIN",
@@ -152,6 +176,58 @@ const app = {
           } else {
             errorEl.style.display = "block";
             errorEl.textContent = "Invalid username or password.";
+          }
+        } catch (err) {
+          errorEl.style.display = "block";
+          errorEl.textContent = "Network error. Please try again.";
+        }
+      });
+    }
+
+    if (signupForm) {
+      signupForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const user = document.getElementById("signupUsernameInput").value.trim();
+        const pass = document.getElementById("signupPasswordInput").value.trim();
+        const confirmPass = document.getElementById("signupConfirmPasswordInput").value.trim();
+        const errorEl = document.getElementById("signupError");
+
+        if (pass !== confirmPass) {
+          errorEl.style.display = "block";
+          errorEl.textContent = "Passwords do not match.";
+          return;
+        }
+
+        if (pass.length < 6) {
+          errorEl.style.display = "block";
+          errorEl.textContent = "Password must be at least 6 characters.";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/signup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: user, password: pass })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            errorEl.style.display = "none";
+            this.currentUser = data.username;
+            localStorage.setItem("brainsyncUser", data.username);
+
+            window.postMessage({
+              type: "FROM_BRAINSYNC_WEB",
+              action: "LOGIN",
+              userId: data.username
+            }, "*");
+
+            this.renderAuthUI();
+            this.navigate("home");
+          } else {
+            const errData = await res.json();
+            errorEl.style.display = "block";
+            errorEl.textContent = errData.error || "Failed to create account.";
           }
         } catch (err) {
           errorEl.style.display = "block";

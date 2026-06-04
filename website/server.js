@@ -92,9 +92,9 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(err.status, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ success: false, error: err.message }));
       }
-      console.error('Signup error:', err);
+      console.error('Signup error details:', err.message, err.code);
       res.writeHead(500, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: false, error: "Server error" }));
+      return res.end(JSON.stringify({ success: false, error: err.message || "Server error" }));
     }
   }
 

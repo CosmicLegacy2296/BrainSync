@@ -37,6 +37,7 @@ async function ensureAuthSchema() {
           name VARCHAR(255) UNIQUE NOT NULL,
           email VARCHAR(255) UNIQUE NOT NULL,
           password VARCHAR(255) NOT NULL,
+          max_allowed_days INT DEFAULT 30,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
@@ -83,10 +84,10 @@ async function createAccount(input) {
 
   try {
     const result = await dbQuery(
-      `INSERT INTO users (name, email, password)
-       VALUES ($1, $2, $3)
+      `INSERT INTO users (name, email, password, max_allowed_days)
+       VALUES ($1, $2, $3, $4)
        RETURNING name, email`,
-      [username, username, password_hash]
+      [username, username, password_hash, 30]
     );
 
     return result.rows[0];
