@@ -81,8 +81,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url === "/api/signup" && req.method === "POST") {
     try {
-      const { username, email, password } = await getBody(req);
-      const account = await createAccount({ username, email, password });
+      const { username, password } = await getBody(req);
+      const account = await createAccount({ username, password });
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ success: true, username: account.username, userId: account.id }));
     } catch (err) {
