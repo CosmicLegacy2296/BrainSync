@@ -23,25 +23,8 @@ async function ensureAuthSchema() {
   }
 
   schemaReadyPromise = (async () => {
-    const result = await dbQuery(
-      `SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables
-        WHERE table_name = 'users'
-      );`
-    );
-
-    if (!result.rows[0].exists) {
-      await dbQuery(`
-        CREATE TABLE users (
-          id SERIAL PRIMARY KEY,
-          name VARCHAR(255) UNIQUE NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password VARCHAR(255) NOT NULL,
-          max_allowed_days INT DEFAULT 30,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-    }
+    // Table already exists in production, no need to create
+    return;
   })();
 
   return schemaReadyPromise;
@@ -84,10 +67,10 @@ async function createAccount(input) {
 
   try {
     const result = await dbQuery(
-      `INSERT INTO users (name, email, password, max_allowed_days)
-       VALUES ($1, $2, $3, $4)
-       RETURNING name, email`,
-      [username, username, password_hash, 30]
+      `INSERT INTO accounts (username, email, password_hash, display_name, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING username, email`,
+      [username, username, password_hash, username, 'user', true]
     );
 
     return result.rows[0];
@@ -107,9 +90,9 @@ async function loginWithPassword(input) {
   const sanitized = sanitizeLoginInput(input);
 
   const result = await dbQuery(
-    `SELECT name, email, password
-     FROM users
-     WHERE LOWER(name) = $1
+    `SELECT username, email, password_hash
+     FROM accounts
+     WHERE LOWER(username) = $1
      LIMIT 1`,
     [sanitized.username.toLowerCase()]
   );
@@ -120,13 +103,13 @@ async function loginWithPassword(input) {
     throw new AuthInputError('Invalid username or password.');
   }
 
-  const validPassword = await verifyPasswordAsync(sanitized.password, account.password);
+  const validPassword = await verifyPasswordAsync(sanitized.password, account.password_hash);
 
   if (!validPassword) {
     throw new AuthInputError('Invalid username or password.');
   }
 
-  const { password: _, ...publicAccount } = account;
+  const { password_hash: _, ...publicAccount } = account;
   return publicAccount;
 }
 

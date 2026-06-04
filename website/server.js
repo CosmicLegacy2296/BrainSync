@@ -69,7 +69,7 @@ const server = http.createServer(async (req, res) => {
       const { username, password } = await getBody(req);
       const account = await loginWithPassword({ username, password });
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: true, username: account.name }));
+      return res.end(JSON.stringify({ success: true, username: account.username }));
     } catch (err) {
       if (err instanceof AuthInputError) {
         res.writeHead(err.status, { "Content-Type": "application/json" });
@@ -86,7 +86,7 @@ const server = http.createServer(async (req, res) => {
       const { username, password } = await getBody(req);
       const account = await createAccount({ username, password });
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: true, username: account.name }));
+      return res.end(JSON.stringify({ success: true, username: account.username }));
     } catch (err) {
       if (err instanceof AuthInputError || err instanceof AuthConflictError) {
         res.writeHead(err.status, { "Content-Type": "application/json" });
