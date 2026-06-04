@@ -79,7 +79,7 @@ async function createAccount(input) {
     const result = await dbQuery(
       `INSERT INTO accounts (username, email, password_hash, display_name, role, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING username, email`,
+       RETURNING id, username, email`,
       [username, email, password_hash, username, 'user', true]
     );
 
@@ -100,7 +100,7 @@ async function loginWithPassword(input) {
   const sanitized = sanitizeLoginInput(input);
 
   const result = await dbQuery(
-    `SELECT username, email, password_hash
+    `SELECT id, username, email, password_hash
      FROM accounts
      WHERE LOWER(username) = $1
      LIMIT 1`,
