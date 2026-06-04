@@ -516,7 +516,7 @@ const app = {
     }
 
     try {
-      await fetch("/api/presets", {
+      await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: this.currentUser, presets: saved })
@@ -548,7 +548,7 @@ const app = {
     saved = saved.filter(s => s.id !== id);
 
     try {
-      await fetch("/api/presets", {
+      await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: this.currentUser, presets: saved })

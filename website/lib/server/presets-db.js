@@ -21,7 +21,7 @@ async function createPreset(userId, { username, title, intent, duration, stats }
 
   try {
     const result = await dbQuery(
-      `INSERT INTO presets (user_id, username, title, intent, duration, stats)
+      `INSERT INTO "BrainSync".presets (user_id, username, title, intent, duration, stats)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING preset_id, user_id, username, title, intent, duration, stats, created_at`,
       [userId, username, title, intent || null, duration, stats || null]
@@ -45,7 +45,7 @@ async function getPresetsByUser(userId) {
 
   const result = await dbQuery(
     `SELECT preset_id, user_id, username, title, intent, duration, stats, created_at
-     FROM presets
+     FROM "BrainSync".presets
      WHERE user_id = $1
      ORDER BY created_at DESC`,
     [userId]
@@ -61,7 +61,7 @@ async function getPresetById(presetId, userId) {
 
   const result = await dbQuery(
     `SELECT preset_id, user_id, username, title, intent, duration, stats, created_at
-     FROM presets
+     FROM "BrainSync".presets
      WHERE preset_id = $1 AND user_id = $2`,
     [presetId, userId]
   );
@@ -91,7 +91,7 @@ async function updatePreset(presetId, userId, updates) {
 
   try {
     const result = await dbQuery(
-      `UPDATE presets
+      `UPDATE "BrainSync".presets
        SET ${setClauses}
        WHERE preset_id = $${fields.length + 1} AND user_id = $${fields.length + 2}
        RETURNING preset_id, user_id, username, title, intent, duration, stats, created_at`,
@@ -120,7 +120,7 @@ async function deletePreset(presetId, userId) {
   }
 
   const result = await dbQuery(
-    `DELETE FROM presets
+    `DELETE FROM "BrainSync".presets
      WHERE preset_id = $1 AND user_id = $2
      RETURNING preset_id`,
     [presetId, userId]

@@ -5,6 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const { createAccount, loginWithPassword, AuthInputError, AuthConflictError } = require('./lib/server/auth-db');
 const { createPreset, getPresetsByUser, getPresetById, updatePreset, deletePreset, PresetError, PresetNotFoundError } = require('./lib/server/presets-db');
+const { createInsight, getInsightsByUser, InsightError, InsightNotFoundError } = require('./lib/server/insights-db');
 const { dbQuery } = require('./lib/server/db');
 
 const PORT = process.env.PORT || 3000;
@@ -103,7 +104,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url.startsWith("/api/presets")) {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    const username = urlObj.searchParams.get("username");
+    const body = req.method === "POST" ? await getBody(req) : {};
+    const username = urlObj.searchParams.get("username") || body.username;
 
     if (!username) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -141,7 +143,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === "POST") {
-        const { presets: presetsArray } = await getBody(req);
+        const presetsArray = body.presets;
         if (!Array.isArray(presetsArray)) {
           res.writeHead(400, { "Content-Type": "application/json" });
           return res.end(JSON.stringify({ error: "Presets must be an array" }));
@@ -149,14 +151,14 @@ const server = http.createServer(async (req, res) => {
 
         // Get current presets from DB
         const currentPresets = await getPresetsByUser(userId);
-        const currentPresetIds = new Set(currentPresets.map(p => p.preset_id));
+        const currentPresetIds = new Set(currentPresets.map(p => parseInt(p.preset_id)));
         const incomingPresetIds = new Set();
 
         // Process incoming presets
         for (const preset of presetsArray) {
           if (preset.id?.startsWith("preset_")) {
             // Existing preset - update
-            const presetId = parseInt(preset.id.substring(8));
+            const presetId = parseInt(preset.id.substring(7));
             incomingPresetIds.add(presetId);
             await updatePreset(presetId, userId, {
               title: preset.title,
@@ -173,7 +175,7 @@ const server = http.createServer(async (req, res) => {
               duration: preset.duration,
               stats: preset.stats || "Custom Preset"
             });
-            incomingPresetIds.add(newPreset.preset_id);
+            incomingPresetIds.add(parseInt(newPreset.preset_id));
           }
         }
 
@@ -213,39 +215,71 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url.startsWith("/api/insights")) {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    const username = urlObj.searchParams.get("username");
+    const body = req.method === "POST" ? await getBody(req) : {};
+    const username = urlObj.searchParams.get("username") || body.username;
 
-    if (req.method === "GET") {
-      if (!username) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ error: "Missing username parameter" }));
-      }
-      const insightsPath = path.join(dbDir, `${username}_insights.json`);
-      if (fs.existsSync(insightsPath)) {
-        const data = fs.readFileSync(insightsPath, "utf-8");
-        res.writeHead(200, { "Content-Type": "application/json" });
-        return res.end(data);
-      } else {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify([]));
-      }
+    if (!username) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ error: "Missing username parameter" }));
     }
 
-    if (req.method === "POST") {
-      const { username: postUsername, session } = await getBody(req);
-      if (!postUsername || !session) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ error: "Missing username or session data" }));
+    try {
+      // Get user_id from username
+      const userResult = await dbQuery(
+        `SELECT id FROM accounts WHERE LOWER(username) = LOWER($1)`,
+        [username]
+      );
+
+      if (userResult.rows.length === 0) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: "User not found" }));
       }
-      const insightsPath = path.join(dbDir, `${postUsername}_insights.json`);
-      let insights = [];
-      if (fs.existsSync(insightsPath)) {
-        insights = JSON.parse(fs.readFileSync(insightsPath, "utf-8") || "[]");
+
+      const userId = userResult.rows[0].id;
+
+      if (req.method === "GET") {
+        const insights = await getInsightsByUser(userId);
+        const formattedInsights = insights.map(row => ({
+          title: row.title,
+          intent: row.intent,
+          duration: row.duration,
+          startTime: row.start_time ? parseInt(row.start_time) : null,
+          endTime: row.end_time ? parseInt(row.end_time) : null,
+          completedAt: row.completed_at,
+          analytics: row.analytics
+        }));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify(formattedInsights));
       }
-      insights.push(session);
-      fs.writeFileSync(insightsPath, JSON.stringify(insights, null, 2));
-      res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: true }));
+
+      if (req.method === "POST") {
+        const session = body.session;
+        if (!session) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ error: "Missing session data" }));
+        }
+
+        await createInsight(userId, {
+          title: session.title,
+          intent: session.intent || session.objective,
+          duration: session.duration,
+          startTime: session.startTime,
+          endTime: session.endTime,
+          completedAt: session.completedAt,
+          analytics: session.analytics
+        });
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: true }));
+      }
+    } catch (err) {
+      if (err instanceof InsightError || err instanceof InsightNotFoundError) {
+        res.writeHead(err.status || 400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+      console.error('Insights API error:', err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ error: "Server error" }));
     }
   }
 
@@ -280,9 +314,12 @@ const server = http.createServer(async (req, res) => {
 
 async function start() {
   try {
-    const { dbQuery } = require('./lib/server/db');
+    const { dbQuery, ensureDatabaseSchema } = require('./lib/server/db');
     await dbQuery('SELECT 1');
     console.log('Database connected');
+
+    await ensureDatabaseSchema();
+    console.log('Database schema verified');
 
     server.listen(PORT, () => {
       console.log(`BrainSync website running at http://localhost:${PORT}`);
