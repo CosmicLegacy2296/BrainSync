@@ -188,7 +188,6 @@ const app = {
       signupForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const user = document.getElementById("signupUsernameInput").value.trim();
-        const email = document.getElementById("signupEmailInput").value.trim();
         const pass = document.getElementById("signupPasswordInput").value.trim();
         const confirmPass = document.getElementById("signupConfirmPasswordInput").value.trim();
         const errorEl = document.getElementById("signupError");
@@ -209,7 +208,7 @@ const app = {
           const res = await fetch("/api/signup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: user, email: email, password: pass })
+            body: JSON.stringify({ username: user, password: pass })
           });
           if (res.ok) {
             const data = await res.json();
@@ -289,6 +288,7 @@ const app = {
       this.renderList('quickstart');
     } else if (route === 'insights') {
       await this.loadInsights();
+      await this.loadPresets();
       this.contentArea.innerHTML =
         `<div class="view active-view" id="view-${route}">${this.views[route]}</div>`;
       this.renderList('insights');
@@ -366,7 +366,8 @@ const app = {
       duration: session.duration,
       startTime: Date.now(),
       endTime: Date.now() + durationMs,
-      isActive: true
+      isActive: true,
+      presetId: session.preset_id || null
     };
 
     window.postMessage({
@@ -517,7 +518,7 @@ const app = {
     }
 
     try {
-      await fetch("/api/presets", {
+      await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: this.currentUser, presets: saved })
@@ -549,7 +550,7 @@ const app = {
     saved = saved.filter(s => s.id !== id);
 
     try {
-      await fetch("/api/presets", {
+      await fetch(`/api/presets?username=${encodeURIComponent(this.currentUser)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: this.currentUser, presets: saved })
@@ -564,9 +565,25 @@ const app = {
 };
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => app.init());
+  document.addEventListener("DOMContentLoaded", () => {
+    app.init();
+    window.addEventListener("hashchange", () => {
+      const route = window.location.hash.replace('#', '') || 'home';
+      const activeView = document.querySelector(".view.active-view");
+      if (!activeView || activeView.id !== `view-${route}`) {
+        app.navigate(route);
+      }
+    });
+  });
 } else {
   app.init();
+  window.addEventListener("hashchange", () => {
+    const route = window.location.hash.replace('#', '') || 'home';
+    const activeView = document.querySelector(".view.active-view");
+    if (!activeView || activeView.id !== `view-${route}`) {
+      app.navigate(route);
+    }
+  });
 }
 
 window.addEventListener("message", (event) => {

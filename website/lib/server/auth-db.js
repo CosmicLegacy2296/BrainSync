@@ -38,11 +38,6 @@ function validateUsername(username) {
   return username.length >= 3;
 }
 
-function validateEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
-
 function sanitizeLoginInput(input) {
   const username = normalizeUsername(input.username ?? '');
   const password = input.password ?? '';
@@ -58,28 +53,24 @@ async function createAccount(input) {
   await ensureAuthSchema();
 
   const username = normalizeUsername(input.username ?? '');
-  const email = (input.email ?? '').trim();
   const password = input.password ?? '';
 
-  if (!username || !email || !password) {
-    throw new AuthInputError('Username, email, and password are required.');
+  if (!username || !password) {
+    throw new AuthInputError('Username and password are required.');
   }
 
   if (!validateUsername(username)) {
     throw new AuthInputError('Username must be at least 3 characters.');
   }
 
-  if (!validateEmail(email)) {
-    throw new AuthInputError('Please provide a valid email address.');
-  }
-
   const password_hash = hashPassword(password);
 
   try {
+    const email = `${username}@brainsync.local`;
     const result = await dbQuery(
       `INSERT INTO accounts (username, email, password_hash, display_name, role, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING username, email`,
+       RETURNING id, username, email`,
       [username, email, password_hash, username, 'user', true]
     );
 
@@ -87,7 +78,7 @@ async function createAccount(input) {
   } catch (error) {
     const pgCode = error.code;
     if (pgCode === '23505') {
-      throw new AuthConflictError('Username or email already exists.');
+      throw new AuthConflictError('Username already exists.');
     }
 
     throw error;
@@ -100,7 +91,7 @@ async function loginWithPassword(input) {
   const sanitized = sanitizeLoginInput(input);
 
   const result = await dbQuery(
-    `SELECT username, email, password_hash
+    `SELECT id, username, email, password_hash
      FROM accounts
      WHERE LOWER(username) = $1
      LIMIT 1`,
