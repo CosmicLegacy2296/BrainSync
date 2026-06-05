@@ -477,7 +477,7 @@ if (openWebsiteLoginBtn) {
   openWebsiteLoginBtn.addEventListener("click", (e) => {
     e.preventDefault();
     if (typeof chrome !== "undefined" && chrome.tabs) {
-      chrome.tabs.create({ url: "http://localhost:3000/" });
+      chrome.tabs.create({ url: "https://brainsync.sub-sync.ca/#home" });
     }
   });
 }
