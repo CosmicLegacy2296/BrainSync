@@ -586,21 +586,15 @@ if (document.readyState === "loading") {
   });
 }
 
-window.addEventListener("message", (event) => {
+window.addEventListener("message", async (event) => {
   if (event.data && event.data.type === "FROM_BRAINSYNC_EXT_SYNC") {
-    const extSessions = (event.data.sessions || []).map((s, index) => ({
-      id: "ext_" + index,
-      title: s.title,
-      duration: s.duration || s.timeMinutes || Math.round((s.endTime - s.startTime) / 60000) || 0,
-      intent: s.intent || s.objective || "Self-guided session",
-      stats: "Completed " + new Date(s.completedAt).toLocaleTimeString(),
-      type: "history",
-      analytics: s.analytics || null
-    }));
+    await app.loadPresets();
+    await app.loadInsights();
 
-    app.mockSessions = app.mockSessions.filter(s => !s.id.startsWith("ext_"));
-    app.mockSessions.push(...extSessions);
-
-    if (window.location.hash === "#insights") app.renderList('insights');
+    if (window.location.hash === "#insights") {
+      app.renderList('insights');
+    } else if (window.location.hash === "#quickstart") {
+      app.renderList('quickstart');
+    }
   }
 });
