@@ -1,27 +1,201 @@
 let currentObjectiveKeywords = [];
+let currentObjectiveCoreKeywords = [];
 let activeSessionActive = false;
 let isBreathingSequenceActive = false;
 let engine = null;
+const WEBSITE_URL = "http://localhost:3000";
 
-const BAD_DOMAINS = ["youtube.com", "facebook.com", "instagram.com", "reddit.com", "netflix.com", "tiktok.com", "twitter.com", "x.com", "pinterest.com", "twitch.tv", "spotify.com", "roblox.com"];
+// FOCUS_BANDS - keep in sync with popup.js and content.js
+const FOCUS_BANDS = [
+  {
+    min: 85, max: 100,
+    label: "Deep Focus",
+    sublabel: "You're in the zone.",
+    color: "#52d9a0",
+    glowColor: "rgba(82, 217, 160, 0.3)",
+    ringColor: "#52d9a0",
+    dotClass: "focus-deep"
+  },
+  {
+    min: 65, max: 84,
+    label: "On Track",
+    sublabel: "Staying focused.",
+    color: "#FFD700",
+    glowColor: "rgba(255, 215, 0, 0.3)",
+    ringColor: "#FFD700",
+    dotClass: "focus-good"
+  },
+  {
+    min: 45, max: 64,
+    label: "Drifting",
+    sublabel: "Pull back to your task.",
+    color: "#ffb347",
+    glowColor: "rgba(255, 179, 71, 0.3)",
+    ringColor: "#ffb347",
+    dotClass: "focus-drift"
+  },
+  {
+    min: 20, max: 44,
+    label: "Losing Focus",
+    sublabel: "Refocus now.",
+    color: "#ff7043",
+    glowColor: "rgba(255, 112, 67, 0.35)",
+    ringColor: "#ff7043",
+    dotClass: "focus-low"
+  },
+  {
+    min: 0, max: 19,
+    label: "Distracted",
+    sublabel: "Breathe and return.",
+    color: "#ff4d4d",
+    glowColor: "rgba(255, 77, 77, 0.4)",
+    ringColor: "#ff4d4d",
+    dotClass: "focus-critical"
+  }
+];
+
+function getFocusBand(score) {
+  return FOCUS_BANDS.find(b => score >= b.min && score <= b.max) || FOCUS_BANDS[4];
+}
+
+const BAD_DOMAINS = [
+  "youtube.com", "facebook.com", "instagram.com", "reddit.com", "netflix.com",
+  "tiktok.com", "twitter.com", "x.com", "pinterest.com", "twitch.tv",
+  "spotify.com", "roblox.com", "linkedin.com", "discord.com", "snapchat.com",
+  "tumblr.com", "9gag.com", "imgur.com", "buzzfeed.com", "dailymail.co.uk",
+  "tmz.com", "bleacherreport.com", "espn.com"
+];
+
+const STOP_WORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "for", "if", "in", "is",
+  "it", "of", "on", "or", "the", "to", "was", "will", "with", "from", "your",
+  "have", "complete", "finish", "start", "doing", "some", "work", "session",
+  "learn", "read", "study", "research", "find", "make", "take", "look", "what",
+  "where", "when", "why", "who", "like", "just", "into", "over", "only",
+  "also", "using", "through", "between", "because", "should", "could", "would",
+  "their", "there", "these", "those", "which", "while", "after", "before",
+  "during", "without", "within", "under", "above", "below", "around", "against",
+  "across", "along", "behind", "beside", "until", "since", "about", "although",
+  "except", "inside", "outside", "toward", "towards", "throughout", "upon",
+  "whether", "www", "com", "org", "net", "html", "https", "http", "page"
+]);
+
+const TITLE_SUFFIXES = [
+  " - Google Search", " | Wikipedia", " - Wikipedia", " - YouTube",
+  " | YouTube", " - Google Docs", " - Google Drive", " | LinkedIn",
+  " | Reddit", " - Stack Overflow"
+];
+
+function stemLite(word) {
+  let token = String(word || "").toLowerCase();
+  if (token.length > 6 && token.endsWith("ing")) token = token.slice(0, -3);
+  else if (token.length > 5 && token.endsWith("ed")) token = token.slice(0, -2);
+  else if (token.length > 5 && token.endsWith("ly")) token = token.slice(0, -2);
+  else if (token.length > 5 && token.endsWith("s") && !token.endsWith("ss") && !token.endsWith("us")) token = token.slice(0, -1);
+  return token;
+}
 
 function extractKeywords(text) {
-  const words = text.toLowerCase().split(/\W+/).filter(w => w.length > 3);
-  const stopWords = ["this", "that", "with", "from", "your", "have", "complete", "finish", "start", "doing", "some", "work", "session", "learn", "read", "study", "research", "find", "make", "take", "look", "what", "where", "when", "why", "who", "about", "like", "just", "into", "over", "only", "also"];
-  return words.filter(w => !stopWords.includes(w));
+  const words = String(text || "")
+    .toLowerCase()
+    .split(/\W+/)
+    .map(stemLite)
+    .filter(w => w.length > 4 && !/^\d+$/.test(w) && !STOP_WORDS.has(w));
+  return [...new Set(words)];
 }
 
 async function fetchSemanticKeywords(objective) {
-  let words = extractKeywords(objective);
+  const words = extractKeywords(objective);
   try {
-     const res = await fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(objective)}&max=15`);
-     if (res.ok) {
-        const data = await res.json();
-        const related = data.map(item => item.word);
-        words = [...new Set([...words, ...related])];
-     }
-  } catch(e) {}
-  return words.filter(w => w.length > 3);
+    const res = await fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(objective)}&max=12`);
+    if (res.ok) {
+      const data = await res.json();
+      const related = data
+        .filter(item => Number(item.score || 0) > 0)
+        .slice(0, 8)
+        .flatMap(item => extractKeywords(item.word));
+      return [...new Set([...words, ...related])];
+    }
+  } catch (e) {
+    // Semantic enrichment is optional; extension scoring must work offline.
+  }
+  return words;
+}
+
+function stripTitleSuffix(title) {
+  let clean = String(title || "");
+  for (const suffix of TITLE_SUFFIXES) {
+    if (clean.endsWith(suffix)) clean = clean.slice(0, -suffix.length);
+  }
+  return clean;
+}
+
+function isWordMatch(a, b) {
+  const left = stemLite(a);
+  const right = stemLite(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.length > 4 && right.length > 4 && (left.includes(right) || right.includes(left))) return true;
+  return false;
+}
+
+function meaningfulUrlParts(url) {
+  try {
+    const parsed = new URL(url);
+    const hostParts = parsed.hostname
+      .replace(/^www\./, "")
+      .split(/[.\-_]+/)
+      .map(stemLite)
+      .filter(part => part.length > 2 && !STOP_WORDS.has(part));
+    const pathParts = decodeURIComponent(parsed.pathname || "")
+      .split(/[\/\-_+%.\s]+/)
+      .map(stemLite)
+      .filter(part => part.length > 3 && !STOP_WORDS.has(part) && !/^\d+$/.test(part));
+    return { hostname: parsed.hostname, hostParts, pathParts };
+  } catch (e) {
+    return { hostname: "", hostParts: [], pathParts: [] };
+  }
+}
+
+function scoreWordParts(parts, keywords) {
+  const matched = new Set();
+  for (const part of parts) {
+    for (const keyword of keywords) {
+      if (isWordMatch(part, keyword)) matched.add(keyword);
+    }
+  }
+  return matched;
+}
+
+function scoreUrl(url, keywords) {
+  if (!keywords.length) return 0;
+  const { hostParts, pathParts } = meaningfulUrlParts(url);
+  const hostMatches = scoreWordParts(hostParts, keywords);
+  const pathMatches = scoreWordParts(pathParts, keywords);
+  const allMatches = new Set([...hostMatches, ...pathMatches]);
+  let score = 0;
+  score += Math.min(0.35, hostMatches.size * 0.18);
+  score += Math.min(0.55, pathMatches.size * 0.28);
+  if (pathMatches.size > 0) score += 0.15;
+  if (allMatches.size >= 2) score += 0.15;
+  return Math.min(1, score);
+}
+
+function scoreTitle(title, keywords) {
+  if (!keywords.length) return 0;
+  const titleKeywords = extractKeywords(stripTitleSuffix(title));
+  const matches = scoreWordParts(titleKeywords, keywords);
+  if (matches.size >= 3) return 1;
+  return Math.min(1, matches.size / Math.min(3, keywords.length));
+}
+
+function isHighDopamineUrl(url) {
+  try {
+    const { hostname } = new URL(url);
+    return BAD_DOMAINS.some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch (e) {
+    return false;
+  }
 }
 
 class FocusEngine {
@@ -29,13 +203,13 @@ class FocusEngine {
     this.session = session;
     this.sessionStartTime = session.startTime || Date.now();
     this.active = true;
-    
+
     this.actualFocus = 100;
     this.displayedFocus = 100;
     this.maxPossibleFocus = 100;
     this.actualRisk = 0;
     this.displayedRisk = 0;
-    
+
     this.focusStreakTime = 0;
     this.peekCount = 0;
     this.recentBadEvents = 0;
@@ -44,32 +218,23 @@ class FocusEngine {
     this.longestStreak = 0;
     this.maxRiskReached = 0;
     this.mostDistractingTimeElapsed = 0;
-    this.lastTabWasHighDopamine = false;
-
     this.focusSamples = [];
     this.lastSampleTime = Date.now();
-    
+
     this.reward30 = false;
     this.reward60 = false;
     this.reward120 = false;
     this.wasHighRisk = false;
     this.resetApplied = false;
-    this.currentTabType = "neutral";
+    this.currentTabType = "pending";
 
     this.lastTickTime = Date.now();
     this.lastTabSwitchTime = Date.now();
-    
-    this.intervalId = setInterval(() => this.tick(), 2000); 
 
-    this.maxSessionTime = 120 * 60 * 1000;
-    this.T_total_expected = 30 * 60 * 1000;
-    
-    let nTime = this.T_total_expected / this.maxSessionTime;
-    this.normalizedTime = Math.min(1, Math.max(0, nTime));
-    
+    this.intervalId = setInterval(() => this.tick(), 2000);
     this.syncStorage();
   }
-  
+
   stop() {
     this.active = false;
     clearInterval(this.intervalId);
@@ -80,135 +245,127 @@ class FocusEngine {
   }
 
   syncStorage() {
-    chrome.storage.local.set({ 
-      brainsyncFocusLevel: this.displayedFocus,
-      brainsyncDistractionRisk: this.displayedRisk
+    chrome.storage.local.set({
+      brainsyncFocusLevel: Math.max(0, Math.min(100, this.displayedFocus)),
+      brainsyncDistractionRisk: this.displayedRisk,
+      brainsyncCurrentTabType: this.currentTabType
     });
   }
 
-  getMultiplier() {
-    return Math.min(2.5, 1 + this.recentBadEvents * 0.3);
+  applyReward(points) {
+    this.actualFocus = Math.min(this.maxPossibleFocus, this.actualFocus + points);
   }
 
-  applyReward(baseReward) {
-    const factor = this.lerp(1.5, 0.7, this.normalizedTime);
-    this.actualFocus = Math.min(this.maxPossibleFocus, this.actualFocus + baseReward * factor);
-  }
+  applyPenalty(points) {
+    const momentum = Math.min(2.0, 1 + this.recentBadEvents * 0.2);
+    const timeFactor = this.lerp(0.9, 1.3, Math.min(1, (Date.now() - this.sessionStartTime) / (60 * 60 * 1000)));
+    const finalDrop = points * momentum * timeFactor;
+    this.actualFocus = Math.max(0, this.actualFocus - finalDrop);
 
-  applyPenalty(basePenalty) {
-    const factor = this.lerp(0.8, 1.5, this.normalizedTime);
-    const drop = basePenalty * factor * this.getMultiplier();
-    
-    if (drop > 0) {
-      this.maxPossibleFocus = Math.max(85, this.maxPossibleFocus - (drop / 2));
-    }
-    
-    this.actualFocus = Math.max(0, this.actualFocus - drop);
-
-    if (drop >= 10) {
-      this.displayedFocus = this.actualFocus; // VISUALLY INSTANT DROP
-      this.syncStorage(); // Force immediate UI update globally
+    if (finalDrop >= 8) {
+      this.displayedFocus = this.actualFocus;
+      this.syncStorage();
     }
   }
 
   addRisk(amount) {
-    const factor = this.lerp(0.8, 1.5, this.normalizedTime);
-    const finalAmt = amount * factor * this.getMultiplier();
+    const finalAmt = amount * Math.min(2.0, 1 + this.recentBadEvents * 0.2);
     this.actualRisk = Math.min(100, this.actualRisk + finalAmt);
 
     if (this.actualRisk > this.maxRiskReached) {
-        this.maxRiskReached = this.actualRisk;
-        this.mostDistractingTimeElapsed = Date.now() - this.sessionStartTime;
+      this.maxRiskReached = this.actualRisk;
+      this.mostDistractingTimeElapsed = Date.now() - this.sessionStartTime;
     }
 
     if (this.actualRisk > 70 && !this.wasHighRisk) {
-         this.nearDistractions++;
-         this.wasHighRisk = true;
+      this.nearDistractions++;
+      this.wasHighRisk = true;
     }
-    
+
     this.recentBadEvents++;
-    setTimeout(() => { if(this.recentBadEvents > 0) this.recentBadEvents--; }, 60000);
+    setTimeout(() => {
+      if (this.recentBadEvents > 0) this.recentBadEvents--;
+    }, 60000);
   }
 
   decayRisk(deltaTime) {
     if (this.wasHighRisk && this.actualRisk < 40) {
-       this.recoveryAttempts++;
-       this.wasHighRisk = false;
+      this.recoveryAttempts++;
+      this.wasHighRisk = false;
     }
 
-    let decayRate = 1; 
-    if (this.focusStreakTime > 120000) {
-      decayRate *= 1.5;
-    }
+    let decayRate = this.currentTabType === "relevant" ? 1.2 : 0.6;
+    if (this.focusStreakTime > 120000) decayRate *= 1.5;
     this.actualRisk = Math.max(0, this.actualRisk - (decayRate * (deltaTime / 1000)));
 
     if (this.focusStreakTime > 180000) {
       if (!this.resetApplied) {
-         this.actualRisk *= 0.5;
-         this.resetApplied = true;
+        this.actualRisk *= 0.5;
+        this.resetApplied = true;
       }
     } else {
       this.resetApplied = false;
     }
+    this.displayedRisk = this.lerp(this.displayedRisk, this.actualRisk, 0.2);
   }
 
   tick() {
     if (!this.active) return;
     const now = Date.now();
     const deltaTime = now - this.lastTickTime;
+    const dt = deltaTime / 1000;
     this.lastTickTime = now;
 
     if (this.currentTabType === "relevant") {
       this.focusStreakTime += deltaTime;
       this.longestStreak = Math.max(this.longestStreak, this.focusStreakTime);
-
-      // Continuous steady increase for presentation purposes (+1 focus per 2 seconds)
-      this.applyReward(0.5 * (deltaTime / 1000));
-
-      // Accelerated milestone rewards
-      if (this.focusStreakTime > 15000 && !this.reward30) { this.applyReward(3); this.reward30 = true; }
-      if (this.focusStreakTime > 30000 && !this.reward60) { this.applyReward(6); this.reward60 = true; }
-      if (this.focusStreakTime > 60000 && !this.reward120) { this.applyReward(12); this.reward120 = true; }
+      this.applyReward(0.4 * dt);
+      if (this.focusStreakTime > 30000 && !this.reward30) { this.applyReward(2); this.reward30 = true; }
+      if (this.focusStreakTime > 120000 && !this.reward60) { this.applyReward(5); this.reward60 = true; }
+      if (this.focusStreakTime > 300000 && !this.reward120) { this.applyReward(10); this.reward120 = true; }
     } else if (this.currentTabType === "irrelevant") {
-      this.applyPenalty(0.5 * (deltaTime / 1000)); // -1 per 2 seconds
-      this.addRisk(0.5 * (deltaTime / 1000));
+      this.applyPenalty(0.25 * dt);
+      this.addRisk(0.3 * dt);
+      this.focusStreakTime = 0;
     } else if (this.currentTabType === "high_distraction") {
-      this.applyPenalty(1.5 * (deltaTime / 1000)); // -3 per 2 seconds
-      this.addRisk(2.0 * (deltaTime / 1000));
+      this.applyPenalty(1.0 * dt);
+      this.addRisk(1.5 * dt);
+      this.focusStreakTime = 0;
+    } else {
+      this.applyPenalty(0.05 * dt);
+      this.focusStreakTime = 0;
     }
 
-    let sessionRemaining = this.session.endTime - now;
-    if (this.session.isPaused) sessionRemaining = this.session.remainingMs;
-    let totalAssumed = 30 * 60 * 1000;
-    let elapsed = totalAssumed - sessionRemaining;
-    if (elapsed > 0 && elapsed / totalAssumed > 0.8) {
-       this.actualRisk = Math.min(100, this.actualRisk + (0.5 * (deltaTime/1000)));
+    const sessionElapsed = Date.now() - this.sessionStartTime;
+    const sessionTotal = this.session.endTime - this.sessionStartTime;
+    const progress = sessionTotal > 0 ? sessionElapsed / sessionTotal : 0;
+    if (progress > 0.8 && this.currentTabType !== "relevant") {
+      this.applyPenalty(0.2 * dt);
     }
 
     this.decayRisk(deltaTime);
 
-    this.displayedFocus = this.lerp(this.displayedFocus, this.actualFocus, 0.2);
-    this.displayedRisk = this.lerp(this.displayedRisk, this.actualRisk, 0.2);
-    
-    // Take a sample of the focus level every 30 seconds for the Overall Score
+    this.displayedFocus = this.lerp(this.displayedFocus, this.actualFocus, 0.15);
+    this.displayedFocus = Math.max(0, Math.min(100, this.displayedFocus));
+
+    if (this.actualFocus < 20 && this.session && !this.session.hasBreathed) {
+      triggerBreathingExercise(this.session);
+    }
+
     if (now - this.lastSampleTime >= 30000) {
-       this.focusSamples.push(this.actualFocus);
-       this.lastSampleTime = now;
+      this.focusSamples.push(Math.round(this.actualFocus));
+      this.lastSampleTime = now;
     }
 
     this.syncStorage();
-
-    if (this.actualFocus < 20 && this.session && !this.session.hasBreathed) {
-       triggerBreathingExercise(this.session);
-    }
   }
 
   onTabSwitch(tab, isCompleteUpdate = false) {
     if (!this.active) return;
     const now = Date.now();
     const timeOnTab = now - this.lastTabSwitchTime;
-    
     const wasQuickSwitch = timeOnTab < 5000 && !isCompleteUpdate;
+
     if (!isCompleteUpdate) {
       this.lastTabSwitchTime = now;
       this.focusStreakTime = 0;
@@ -216,41 +373,21 @@ class FocusEngine {
       this.reward60 = false;
       this.reward120 = false;
       this.currentTabType = "pending";
+      this.syncStorage();
     }
 
-    if (!tab || !tab.url || tab.url.startsWith("chrome")) {
-      this.applyPenalty(wasQuickSwitch ? 5 : 1);
-      this.addRisk(wasQuickSwitch ? 10 : 2);
-      this.currentTabType = "irrelevant";
+    if (!tab || !tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) {
+      this.applyClassification({ wasQuickSwitch, isHighDopamine: false, urlScore: 0, titleScore: 0, bodyScore: 0 });
       return;
     }
 
-    let isHighDopamine = false;
-    let isHomepage = false;
-    try {
-      const urlObj = new URL(tab.url);
-      isHighDopamine = BAD_DOMAINS.some(d => urlObj.hostname.includes(d));
-      if (urlObj.pathname === "/" || urlObj.pathname === "") {
-        isHomepage = true;
-      }
-    } catch(e) {}
+    const keywords = currentObjectiveCoreKeywords.length ? currentObjectiveCoreKeywords : currentObjectiveKeywords;
+    const isHighDopamine = isHighDopamineUrl(tab.url);
+    const urlScore = scoreUrl(tab.url, keywords);
+    const titleScore = scoreTitle(tab.title || "", keywords);
 
-    if (!isCompleteUpdate) {
-       if (this.lastTabWasHighDopamine && timeOnTab < 10000) {
-          this.actualFocus = Math.min(this.maxPossibleFocus, this.actualFocus + 5);
-          this.actualRisk = Math.max(0, this.actualRisk - 10);
-       }
-       this.lastTabWasHighDopamine = isHighDopamine;
-    }
-
-    // Instantly penalize high dopamine homepages without checking for stray match keywords
-    if (isHighDopamine && isHomepage) {
-       this.applyClassification(wasQuickSwitch, isHighDopamine, false);
-       return;
-    }
-
-    if (currentObjectiveKeywords.length === 0) {
-      this.applyClassification(wasQuickSwitch, isHighDopamine, false);
+    if (!currentObjectiveKeywords.length) {
+      this.applyClassification({ wasQuickSwitch, isHighDopamine, urlScore, titleScore, bodyScore: 0 });
       return;
     }
 
@@ -258,55 +395,76 @@ class FocusEngine {
       action: "scan_keywords",
       keywords: currentObjectiveKeywords
     }, (response) => {
-      if (chrome.runtime.lastError) {
-         this.applyClassification(wasQuickSwitch, isHighDopamine, false);
-         return;
-      }
-      this.applyClassification(wasQuickSwitch, isHighDopamine, response && response.match === true);
+      const bodyScore = chrome.runtime.lastError ? 0 : Math.max(0, Math.min(1, Number(response?.confidence || 0)));
+      this.applyClassification({ wasQuickSwitch, isHighDopamine, urlScore, titleScore, bodyScore });
     });
   }
 
-  applyClassification(wasQuickSwitch, isHighDopamine, isMatch) {
+  applyClassification({ wasQuickSwitch, isHighDopamine, urlScore, titleScore, bodyScore }) {
+    const totalScore = (urlScore * 0.4) + (titleScore * 0.35) + (bodyScore * 0.25);
     let type = "irrelevant";
-    let conf = 0.7;
+    let conf = Math.max(0.2, Math.min(1, totalScore));
 
-    if (isMatch) { type = "relevant"; conf = 1.0; }
-    else if (isHighDopamine) { type = "high_distraction"; conf = 0.9; }
+    if (isHighDopamine) {
+      type = "high_distraction";
+      conf = 1;
+    } else if (totalScore >= 0.35) {
+      type = "relevant";
+      conf = Math.max(0.5, totalScore);
+    } else {
+      type = "irrelevant";
+      conf = Math.max(0.2, totalScore);
+    }
+
+    if (wasQuickSwitch) {
+      this.peekCount++;
+      this.applyPenalty(0.5);
+      this.addRisk(2);
+    }
+
+    switch (type) {
+      case "relevant":
+        break;
+      case "irrelevant":
+        this.applyPenalty(1.0 * conf);
+        this.addRisk(3 * conf);
+        break;
+      case "high_distraction":
+        this.applyPenalty(8.0 * conf);
+        this.addRisk(12 * conf);
+        this.maxPossibleFocus = Math.max(70, this.maxPossibleFocus - 4);
+        break;
+    }
 
     this.currentTabType = type;
-
-    // Enforce 1-2% universal penalty for rapid page thrashing within 0-5s
-    if (wasQuickSwitch) {
-       this.peekCount++;
-       this.applyPenalty(1.5); 
-       this.addRisk(5);
-    }
-
-    if (type === "relevant") {
-       // do nothing additional
-    } else if (type === "irrelevant") {
-       this.applyPenalty(2 * conf);
-       this.addRisk(5 * conf);
-    } else if (type === "high_distraction") {
-       this.applyPenalty(15 * conf);
-       this.addRisk(20 * conf);
-    }
+    chrome.storage.local.set({ brainsyncCurrentTabType: type });
+    this.syncStorage();
   }
 
   getEfficiency() {
-    let finalEfficiency = Math.round(this.actualFocus);
-    if (this.focusSamples.length > 0) {
+    let finalScore;
+    if (this.focusSamples.length >= 2) {
       const sum = this.focusSamples.reduce((a, b) => a + b, 0);
-      finalEfficiency = Math.round(sum / this.focusSamples.length);
+      finalScore = Math.round(sum / this.focusSamples.length);
+    } else {
+      finalScore = Math.round(this.actualFocus);
     }
 
+    if (!this.session.hasBreathed) {
+      finalScore = Math.min(100, finalScore + 3);
+    }
+
+    const band = getFocusBand(finalScore);
+
     return {
-       focusEfficiency: finalEfficiency,
-       nearDistractions: this.nearDistractions,
-       recoveryAttempts: this.recoveryAttempts,
-       longestStreak: Math.round(this.longestStreak / 1000),
-       totalTabSwitches: this.peekCount,
-       mostDistractingTimeElapsedMs: this.mostDistractingTimeElapsed
+      focusEfficiency: finalScore,
+      focusBandLabel: band.label,
+      nearDistractions: this.nearDistractions,
+      recoveryAttempts: this.recoveryAttempts,
+      longestStreak: Math.round(this.longestStreak / 1000),
+      totalTabSwitches: this.peekCount,
+      mostDistractingTimeElapsedMs: this.mostDistractingTimeElapsed,
+      maxPossibleFocus: Math.round(this.maxPossibleFocus)
     };
   }
 }
@@ -314,14 +472,14 @@ class FocusEngine {
 chrome.tabs.onActivated.addListener(activeInfo => {
   if (!activeSessionActive || !engine) return;
   chrome.tabs.get(activeInfo.tabId, (tab) => {
-     engine.onTabSwitch(tab, false);
+    engine.onTabSwitch(tab, false);
   });
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!activeSessionActive || !engine) return;
   if (changeInfo.status === "complete") {
-     engine.onTabSwitch(tab, true);
+    engine.onTabSwitch(tab, true);
   }
 });
 
@@ -331,33 +489,38 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (s && s.isActive) {
       if (!activeSessionActive) {
         activeSessionActive = true;
-        currentObjectiveKeywords = extractKeywords(s.objective || "");
-        fetchSemanticKeywords(s.objective || "").then(kw => {
-           currentObjectiveKeywords = kw;
+        const objective = s.objective || s.intent || "";
+        currentObjectiveCoreKeywords = extractKeywords(objective);
+        currentObjectiveKeywords = currentObjectiveCoreKeywords;
+        fetchSemanticKeywords(objective).then(kw => {
+          currentObjectiveKeywords = kw;
         });
-        
+
         if (engine) engine.stop();
         engine = new FocusEngine(s);
-        
+
         chrome.alarms.create("sessionEnd", { when: s.endTime });
       } else {
         if (!s.isPaused) {
-           chrome.alarms.create("sessionEnd", { when: s.endTime });
-           if (engine) engine.session = s;
+          chrome.alarms.create("sessionEnd", { when: s.endTime });
+          if (engine) engine.session = s;
         } else {
-           chrome.alarms.clear("sessionEnd");
-           if (engine) engine.session = s;
+          chrome.alarms.clear("sessionEnd");
+          if (engine) engine.session = s;
         }
       }
     } else {
       activeSessionActive = false;
       chrome.alarms.clear("sessionEnd");
       if (engine) {
-          engine.stop();
-          engine = null;
+        engine.stop();
+        engine = null;
       }
       isBreathingSequenceActive = false;
-      chrome.storage.local.set({ brainsyncBreathing: { isActive: false } });
+      chrome.storage.local.set({
+        brainsyncBreathing: { isActive: false },
+        brainsyncCurrentTabType: "neutral"
+      });
     }
   }
 });
@@ -367,12 +530,12 @@ chrome.runtime.onInstalled.addListener(() => {
     for (const tab of tabs) {
       if (tab.url && !tab.url.startsWith("chrome://") && !tab.url.startsWith("chrome-extension://")) {
         chrome.scripting.executeScript({
-           target: { tabId: tab.id },
-           files: ["content.js"]
+          target: { tabId: tab.id },
+          files: ["content.js"]
         }).catch(() => {});
         chrome.scripting.insertCSS({
-           target: { tabId: tab.id },
-           files: ["content.css"]
+          target: { tabId: tab.id },
+          files: ["content.css"]
         }).catch(() => {});
       }
     }
@@ -407,41 +570,42 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (!data.brainsyncActiveSession || !data.brainsyncActiveSession.isActive) return;
 
     const sessions = data.brainsyncSessions || [];
-    const completedSession = { 
-        ...data.brainsyncActiveSession, 
-        completedAt: new Date().toISOString() 
+    const completedSession = {
+      ...data.brainsyncActiveSession,
+      completedAt: new Date().toISOString()
     };
     if (engine) {
-        completedSession.analytics = engine.getEfficiency();
+      completedSession.analytics = engine.getEfficiency();
     }
     delete completedSession.isActive;
     sessions.push(completedSession);
-    
+
     activeSessionActive = false;
     if (engine) {
-        engine.stop();
-        engine = null;
+      engine.stop();
+      engine = null;
     }
     await chrome.storage.local.set({
-       brainsyncSessions: sessions,
-       brainsyncActiveSession: null
+      brainsyncSessions: sessions,
+      brainsyncActiveSession: null,
+      brainsyncCurrentTabType: "neutral"
     });
 
     if (data.brainsyncUser) {
       try {
-        await fetch("http://localhost:3000/api/insights", {
+        await fetch(`${WEBSITE_URL}/api/insights`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username: data.brainsyncUser, session: completedSession })
         });
-      } catch(e) {
+      } catch (e) {
         console.error("Failed to sync completed session to server", e);
       }
     }
 
     chrome.notifications.create({
       type: "basic",
-      iconUrl: "icon.png",
+      iconUrl: "logo.png",
       title: "BrainSync Timer Done",
       message: "Your focus session has finished! Complete your flow."
     });
@@ -449,18 +613,17 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     chrome.runtime.sendMessage({ action: "play_alarm" }).catch(() => {});
     playAudioOffscreen(data.brainsyncSettings || {});
 
-    // Redirect existing website tab or open a new one to show the insights page
     chrome.tabs.query({}, (tabs) => {
       let foundTab = false;
       for (const tab of tabs) {
-        if (tab.url && (tab.url.startsWith("http://localhost:3000") || tab.url.includes("127.0.0.1:3000"))) {
-          chrome.tabs.update(tab.id, { url: "http://localhost:3000/#insights", active: true });
+        if (tab.url && (tab.url.startsWith(WEBSITE_URL) || tab.url.includes("127.0.0.1:3000"))) {
+          chrome.tabs.update(tab.id, { url: `${WEBSITE_URL}/#insights`, active: true });
           foundTab = true;
           break;
         }
       }
       if (!foundTab) {
-        chrome.tabs.create({ url: "http://localhost:3000/#insights" });
+        chrome.tabs.create({ url: `${WEBSITE_URL}/#insights` });
       }
     });
   }
@@ -494,14 +657,14 @@ async function triggerBreathingExercise(session) {
   if (remainingMs <= 0) return;
 
   chrome.alarms.clear("sessionEnd");
-  
+
   session.isPaused = true;
   session.remainingMs = remainingMs;
   session.hasBreathed = true;
-  
+
   if (engine) engine.session = session;
 
-  await chrome.storage.local.set({ 
+  await chrome.storage.local.set({
     brainsyncActiveSession: session,
     brainsyncBreathing: { isActive: true, state: "message_prompt" }
   });
@@ -530,14 +693,14 @@ async function runBreathingSequence() {
       clearInterval(interval);
       playDirectOffscreenSound("stop_music");
       playDirectOffscreenSound("play_offscreen_audio", "resume_sound");
-      
+
       const freshData = await chrome.storage.local.get(["brainsyncActiveSession"]);
       if (freshData.brainsyncActiveSession && freshData.brainsyncActiveSession.isActive) {
         const activeData = freshData.brainsyncActiveSession;
         activeData.isPaused = false;
         activeData.endTime = Date.now() + activeData.remainingMs;
         delete activeData.remainingMs;
-        
+
         if (engine) engine.session = activeData;
 
         await chrome.storage.local.set({

@@ -5,6 +5,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BrainSync</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css" />
 </head>
 
@@ -13,30 +16,17 @@
   <div class="bg-orb orb-b"></div>
   <div class="noise-layer"></div>
   <main id="app" class="popup popup-size-large">
-    <section id="login-screen" class="screen">
+    <section id="auth-screen" class="screen">
       <div class="content-wrap">
         <img src="logo.png" alt="BrainSync Logo"
           style="width: 65px; height: 65px; margin-bottom: 15px; border-radius: 10px; display: block; margin-left: auto; margin-right: auto;" />
-        <span class="eyebrow">Authentication Required</span>
-        <h2>Log in to BrainSync</h2>
-        <p class="subtle" style="margin-bottom: 18px;">Please enter your credentials to start focusing</p>
-        <form id="popup-login-form" style="width: 100%; max-width: 320px;">
-          <label>
-            Username
-            <input id="popup-username" type="text" required placeholder="e.g. user1" />
-          </label>
-          <label>
-            Password
-            <input id="popup-password" type="password" required placeholder="••••••••" />
-          </label>
-          <div id="popup-login-error" style="color: #ff4d4d; font-size: 0.85rem; display: none; margin-bottom: 10px; text-align: left;"></div>
-          <div class="actions" style="margin-top: 10px; width: 100%;">
-            <button type="submit" class="primary-btn" style="width: 100%;">Log In</button>
-          </div>
-          <div style="margin-top: 15px; text-align: center;">
-            <a href="#" id="openWebsiteLogin" class="hint" style="font-size: 0.8rem; text-decoration: underline; color: var(--accent);">Or log in via Website</a>
-          </div>
-        </form>
+        <span class="eyebrow">Website Login Required</span>
+        <h2>Log in on BrainSync</h2>
+        <p class="subtle" style="margin-bottom: 18px;">Use the website to sign in, then come back here to start focusing.</p>
+        <div class="actions" style="margin-top: 10px; width: 100%; max-width: 320px;">
+          <button type="button" id="openWebsiteLogin" class="primary-btn" style="width: 100%;">Open Website Login</button>
+          <button type="button" id="refresh-auth" class="ghost-btn" style="width: 100%;">I Logged In</button>
+        </div>
       </div>
     </section>
 
@@ -67,6 +57,13 @@
             Session Time (minutes)
             <input id="session-time" type="number" min="1" max="240" required placeholder="e.g. 45" />
           </label>
+          <div class="duration-grid">
+            <button type="button" class="dur-btn" data-mins="15">15m</button>
+            <button type="button" class="dur-btn" data-mins="25">25m</button>
+            <button type="button" class="dur-btn" data-mins="45">45m</button>
+            <button type="button" class="dur-btn" data-mins="60">60m</button>
+            <button type="button" class="dur-btn" data-mins="90">90m</button>
+          </div>
           <label>
             Session Objective
             <textarea id="session-objective" rows="3" required placeholder="What do you want to accomplish?"></textarea>
@@ -85,11 +82,19 @@
         <p class="flow-type" id="active-type"></p>
         <p class="flow-title" id="active-title"></p>
         <p class="countdown" id="countdown">00:00</p>
-        <div class="focus-meter">
-          <div class="focus-meter-header">Focus Level: <span id="focus-level-text">100%</span></div>
-          <div class="focus-meter-bar-bg">
-            <div id="focus-meter-bar-fill" class="focus-meter-bar-fill"></div>
+        <div class="focus-ring-container" id="focus-ring-container">
+          <svg class="focus-ring" viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="52" />
+            <circle class="ring-fill" cx="60" cy="60" r="52" id="focus-ring-fill" />
+          </svg>
+          <div class="ring-inner">
+            <div class="ring-percent" id="focus-level-text">100%</div>
+            <div class="ring-label" id="focus-band-label">Deep Focus</div>
           </div>
+        </div>
+        <div class="flow-status">
+          <span class="flow-status-dot" id="popup-tab-status-dot"></span>
+          <span id="popup-tab-status-text">Analyzing...</span>
         </div>
         <p class="subtle">Stay focused. You got this.</p>
         <div class="actions">
@@ -104,7 +109,7 @@
         style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
         <h2 id="breathing-message"
           style="text-align: center; font-size: 1.1rem; color: #ffeb3b; margin-bottom: 2rem; max-width: 90%; line-height: 1.4;">
-          Your Losing Focus. Breathe To Re-Sync Your Brain</h2>
+          You're Losing Focus. Breathe to Re-Sync Your Brain</h2>
         <button id="breathing-proceed-btn" class="primary-btn" style="margin-bottom: 20px;">Proceed</button>
         <div id="breathing-circle-wrap" class="breathing-circle-container" style="display: none;">
           <div class="breathing-circle-ripple"></div>

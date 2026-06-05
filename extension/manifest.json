@@ -29,7 +29,9 @@
     "alarms",
     "notifications",
     "offscreen",
-    "scripting"
+    "scripting",
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"

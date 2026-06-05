@@ -7,9 +7,64 @@ let currentFocusLevel = 100;
 let previousFocusLevel = 100;
 let focusTrendDecreasing = false;
 let currentDistractionRisk = 0;
+let currentTabType = "neutral";
+let previousBandLabel = "Deep Focus";
 let lastOverlayWarningTime = 0;
 let breathingState = null;
 let breathingHideTimeout = null;
+
+// FOCUS_BANDS - keep in sync with background.js and popup.js
+const FOCUS_BANDS = [
+  {
+    min: 85, max: 100,
+    label: "Deep Focus",
+    sublabel: "You're in the zone.",
+    color: "#52d9a0",
+    glowColor: "rgba(82, 217, 160, 0.3)",
+    ringColor: "#52d9a0",
+    dotClass: "focus-deep"
+  },
+  {
+    min: 65, max: 84,
+    label: "On Track",
+    sublabel: "Staying focused.",
+    color: "#FFD700",
+    glowColor: "rgba(255, 215, 0, 0.3)",
+    ringColor: "#FFD700",
+    dotClass: "focus-good"
+  },
+  {
+    min: 45, max: 64,
+    label: "Drifting",
+    sublabel: "Pull back to your task.",
+    color: "#ffb347",
+    glowColor: "rgba(255, 179, 71, 0.3)",
+    ringColor: "#ffb347",
+    dotClass: "focus-drift"
+  },
+  {
+    min: 20, max: 44,
+    label: "Losing Focus",
+    sublabel: "Refocus now.",
+    color: "#ff7043",
+    glowColor: "rgba(255, 112, 67, 0.35)",
+    ringColor: "#ff7043",
+    dotClass: "focus-low"
+  },
+  {
+    min: 0, max: 19,
+    label: "Distracted",
+    sublabel: "Breathe and return.",
+    color: "#ff4d4d",
+    glowColor: "rgba(255, 77, 77, 0.4)",
+    ringColor: "#ff4d4d",
+    dotClass: "focus-critical"
+  }
+];
+
+function getFocusBand(score) {
+  return FOCUS_BANDS.find(b => score >= b.min && score <= b.max) || FOCUS_BANDS[4];
+}
 
 function makeDraggable(elmnt) {
   let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
@@ -53,13 +108,15 @@ function makeDraggable(elmnt) {
 async function init() {
   const result = await chrome.storage.local.get([
     "brainsyncActiveSession", "brainsyncSettings", "brainsyncSessions", 
-    "brainsyncFocusLevel", "brainsyncDistractionRisk", "brainsyncBreathing"
+    "brainsyncFocusLevel", "brainsyncDistractionRisk", "brainsyncBreathing",
+    "brainsyncCurrentTabType"
   ]);
   activeSession = result.brainsyncActiveSession;
   currentFocusLevel = result.brainsyncFocusLevel ?? 100;
   previousFocusLevel = Math.max(0, Math.min(100, Math.round(Number(currentFocusLevel) || 100)));
   focusTrendDecreasing = false;
   currentDistractionRisk = result.brainsyncDistractionRisk || 0;
+  currentTabType = result.brainsyncCurrentTabType || "neutral";
   breathingState = result.brainsyncBreathing || null;
   settings = result.brainsyncSettings || { smallTimer: "on" };
   if (result.brainsyncSessions) {
@@ -101,6 +158,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
        currentDistractionRisk = changes.brainsyncDistractionRisk.newValue || 0;
        handleRiskWarning();
     }
+    if (changes.brainsyncCurrentTabType) {
+       currentTabType = changes.brainsyncCurrentTabType.newValue || "neutral";
+       updateTabStatus();
+    }
     if (changes.brainsyncSessions) {
        window.postMessage({ type: "FROM_BRAINSYNC_EXT_SYNC", sessions: changes.brainsyncSessions.newValue }, "*");
     }
@@ -113,16 +174,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
      playSoftAlarm(s.alarmSound || "chime", s.alarmVolume || 0.45);
   }
   if (msg.action === "scan_keywords") {
-    const text = document.body.innerText.toLowerCase();
-    const keywords = msg.keywords || [];
+    const text = (document.body?.innerText || "").toLowerCase();
+    const keywords = [...new Set((msg.keywords || []).map(kw => String(kw).toLowerCase()).filter(Boolean))];
     let matchFound = false;
+    let matchCount = 0;
     for (const kw of keywords) {
-      if (text.includes(kw.toLowerCase())) {
+      const pattern = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+      const hits = text.match(pattern);
+      if (hits && hits.length) {
         matchFound = true;
-        break;
+        matchCount += Math.min(2, hits.length >= 5 ? 2 : 1);
       }
     }
-    sendResponse({ match: matchFound });
+    const confidence = keywords.length ? Math.min(1, matchCount / (keywords.length * 2)) : 0;
+    sendResponse({
+      match: matchFound,
+      matchCount,
+      totalKeywords: keywords.length,
+      confidence
+    });
   }
 });
 
@@ -132,11 +202,6 @@ window.addEventListener("message", (event) => {
     if (event.data.action === "START_SESSION") {
       chrome.storage.local.set({ 
         brainsyncActiveSession: event.data.sessionData
-      });
-    } else if (event.data.action === "CLEAR_DATA") {
-      chrome.storage.local.set({ 
-        brainsyncSessions: [],
-        brainsyncActiveSession: null
       });
     } else if (event.data.action === "LOGIN") {
       chrome.storage.local.set({ 
@@ -187,6 +252,10 @@ function updateUI() {
           <div class="bs-mini-countdown"></div>
           <div class="bs-mini-focus">Focus: <span class="bs-mini-focus-text">100%</span></div>
           <div class="bs-mini-focus-bar-bg"><div class="bs-mini-focus-bar-fill"></div></div>
+          <div class="bs-mini-tab-status">
+            <span class="bs-mini-status-dot" id="bs-status-dot"></span>
+            <span class="bs-mini-status-text" id="bs-status-text">Analyzing...</span>
+          </div>
           <div class="bs-mini-risk-warning" style="display:none; color:#ffb347; font-size:10px; margin-top:6px; text-align:center; font-weight:bold; transition:all 0.3s ease;"></div>
         </div>
         <div class="bs-mini-risk-overlay" style="display:none; opacity:0; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,50,50,0.95); color:white; flex-direction:column; align-items:center; justify-content:center; border-radius:inherit; transition:opacity 0.2s ease; z-index:10; pointer-events:none;">
@@ -194,7 +263,7 @@ function updateUI() {
           <div class="bs-mini-risk-overlay-line2" style="font-size:10px; text-align:center; padding:0 8px;">Focus on task.</div>
         </div>
         <div class="bs-mini-breathing-overlay" style="display: none; opacity: 0; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-          <div class="bs-mini-pause-text" style="color: #ffeb3b; font-size: 11px; text-align: center; margin-bottom: 6px; font-weight: 600;">Your Losing Focus. Breathe To Re-Sync Your Brain</div>
+          <div class="bs-mini-pause-text" style="color: #ffeb3b; font-size: 11px; text-align: center; margin-bottom: 6px; font-weight: 600;">You're Losing Focus. Breathe to Re-Sync Your Brain</div>
           <button class="bs-mini-proceed-btn" style="background:#ffd24a; color:#111; border:none; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; cursor:pointer; margin-bottom: 8px;">Proceed</button>
           <div class="bs-mini-breathe-circle-container" style="display: none;">
             <div class="bs-mini-breathe-ripple"></div>
@@ -258,6 +327,7 @@ function updateUI() {
   const initialMsLeft = activeSession.isPaused ? activeSession.remainingMs : (activeSession.endTime - Date.now());
   container.querySelector(".bs-mini-countdown").textContent = formatTime(initialMsLeft);
   updateFocusBar();
+  updateTabStatus();
 
   if (breathingState) handleMiniBreathing(breathingState);
   handleRiskWarning();
@@ -374,16 +444,35 @@ function updateFocusBar() {
   const barFill = container.querySelector(".bs-mini-focus-bar-fill");
   if (levelText && barFill) {
     const safeLevel = Math.max(0, Math.min(100, Math.round(currentFocusLevel)));
+    const band = getFocusBand(safeLevel);
     levelText.textContent = `${safeLevel}%`;
     barFill.style.width = `${safeLevel}%`;
-    const lowAndDrifting = focusTrendDecreasing && safeLevel < 50;
-    if (lowAndDrifting) {
-      barFill.style.background = "linear-gradient(90deg, #ff4d4d, #ff8080)";
-    } else if (safeLevel < 70) {
-      barFill.style.background = "linear-gradient(90deg, #ffb347, #ffcc33)";
-    } else {
-      barFill.style.background = "linear-gradient(90deg, #18c2ff, #7cf8e3)";
+    barFill.style.background = band.color;
+    barFill.style.boxShadow = `0 0 10px ${band.glowColor}`;
+    container.style.setProperty("--bs-glow", band.glowColor);
+    if (band.label !== previousBandLabel) {
+      container.classList.remove("bs-band-change");
+      void container.offsetWidth;
+      container.classList.add("bs-band-change");
+      previousBandLabel = band.label;
     }
+  }
+}
+
+function updateTabStatus() {
+  if (!container) return;
+  const dot = container.querySelector("#bs-status-dot");
+  const label = container.querySelector("#bs-status-text");
+  const type = currentTabType || "neutral";
+  if (dot) dot.className = `bs-mini-status-dot ${type}`;
+  if (label) {
+    label.textContent = type === "relevant"
+      ? "On Track"
+      : type === "high_distraction"
+        ? "Distraction!"
+        : type === "pending"
+          ? "Analyzing..."
+          : "Off Task";
   }
 }
 

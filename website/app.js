@@ -1,3 +1,56 @@
+// FOCUS_BANDS - keep in sync with background.js, popup.js, and content.js
+const FOCUS_BANDS = [
+  {
+    min: 85, max: 100,
+    label: "Deep Focus",
+    sublabel: "You're in the zone.",
+    color: "#52d9a0",
+    glowColor: "rgba(82, 217, 160, 0.3)",
+    ringColor: "#52d9a0",
+    dotClass: "focus-deep"
+  },
+  {
+    min: 65, max: 84,
+    label: "On Track",
+    sublabel: "Staying focused.",
+    color: "#FFD700",
+    glowColor: "rgba(255, 215, 0, 0.3)",
+    ringColor: "#FFD700",
+    dotClass: "focus-good"
+  },
+  {
+    min: 45, max: 64,
+    label: "Drifting",
+    sublabel: "Pull back to your task.",
+    color: "#ffb347",
+    glowColor: "rgba(255, 179, 71, 0.3)",
+    ringColor: "#ffb347",
+    dotClass: "focus-drift"
+  },
+  {
+    min: 20, max: 44,
+    label: "Losing Focus",
+    sublabel: "Refocus now.",
+    color: "#ff7043",
+    glowColor: "rgba(255, 112, 67, 0.35)",
+    ringColor: "#ff7043",
+    dotClass: "focus-low"
+  },
+  {
+    min: 0, max: 19,
+    label: "Distracted",
+    sublabel: "Breathe and return.",
+    color: "#ff4d4d",
+    glowColor: "rgba(255, 77, 77, 0.4)",
+    ringColor: "#ff4d4d",
+    dotClass: "focus-critical"
+  }
+];
+
+function getFocusBand(score) {
+  return FOCUS_BANDS.find(b => score >= b.min && score <= b.max) || FOCUS_BANDS[4];
+}
+
 const app = {
   views: {
     home: `
@@ -15,7 +68,8 @@ const app = {
           <button class="action-btn outline-btn" id="toggle-edit-btn" onclick="app.toggleEditMode()">✏️ Edit Presets</button>
         </div>
       </div>
-      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Jump into a pre-configured flow state session.</p>
+      <p class="view-subtitle">Jump into a pre-configured flow state session.</p>
+      <div class="onboarding-callout hidden" id="preset-onboarding">Your default presets are ready! Click any to start a session.</div>
       <div class="sessions-list" id="quickstart-list-container">
         <!-- Injected via JS -->
       </div>
@@ -24,7 +78,7 @@ const app = {
       <div class="sessions-header">
         <h2>Insights</h2>
       </div>
-      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">View your completed sessions and focus history.</p>
+      <p class="view-subtitle">View your completed sessions and focus history.</p>
       <div class="sessions-list" id="insights-list-container">
         <!-- Injected via JS -->
       </div>
@@ -34,6 +88,15 @@ const app = {
   currentUser: null,
   isEditingPresets: false,
   mockSessions: [],
+
+  showToast(message) {
+    const toast = document.getElementById("toast");
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.remove("hidden");
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => toast.classList.add("hidden"), 3000);
+  },
 
   async loadPresets() {
     if (!this.currentUser) return;
@@ -82,13 +145,13 @@ const app = {
       if (contentArea) contentArea.style.display = "flex";
       if (authContainer) {
         authContainer.innerHTML = `
-          <span style="margin-right: 15px; font-weight: bold; color: var(--accent-color);">Logged in as ${this.currentUser}</span>
-          <button class="action-btn outline-btn" id="logoutBtn" style="padding: 4px 10px; font-size: 0.85rem;">Logout</button>
+          <span class="logged-in-label">Logged in as ${this.currentUser}</span>
+          <button class="action-btn outline-btn compact-btn" id="logoutBtn">Logout</button>
         `;
         document.getElementById("logoutBtn").addEventListener("click", () => this.logout());
       }
     } else {
-      if (loginWall) loginWall.style.display = "block";
+      if (loginWall) loginWall.style.display = "grid";
       if (contentArea) contentArea.style.display = "none";
       if (authContainer) authContainer.innerHTML = "";
     }
@@ -172,6 +235,7 @@ const app = {
             }, "*");
 
             this.renderAuthUI();
+            await this.loadPresets();
             this.navigate("home");
           } else {
             errorEl.style.display = "block";
@@ -223,6 +287,7 @@ const app = {
             }, "*");
 
             this.renderAuthUI();
+            await this.loadPresets();
             this.navigate("home");
           } else {
             const errData = await res.json();
@@ -234,24 +299,6 @@ const app = {
           errorEl.textContent = "Network error. Please try again.";
         }
       });
-    }
-
-    try {
-      const res = await fetch("/api/startup-id");
-      if (res.ok) {
-        const data = await res.json();
-        const lastId = localStorage.getItem("brainsync_server_id");
-        if (lastId !== data.id) {
-          localStorage.setItem("brainsync_server_id", data.id);
-          this.mockSessions = this.mockSessions.filter(s => s.type !== "history");
-          window.postMessage({
-            type: "FROM_BRAINSYNC_WEB",
-            action: "CLEAR_DATA"
-          }, "*");
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch startup id", e);
     }
 
     this.navLinks.forEach(link => {
@@ -309,40 +356,65 @@ const app = {
     const filterType = isQuickStart ? "preset" : "history";
     const filteredSessions = this.mockSessions.filter(s => s.type === filterType);
 
+    const onboarding = document.getElementById("preset-onboarding");
+    if (onboarding) {
+      const hasDefaults = filteredSessions.some(s => s.stats === "Default Preset");
+      onboarding.classList.toggle("hidden", !(isQuickStart && hasDefaults));
+    }
+
+    if (filteredSessions.length === 0) {
+      listContainer.innerHTML = `<div class="empty-state">${isQuickStart ? "No presets yet. Add one above!" : "No completed sessions yet."}</div>`;
+      return;
+    }
+
+    const defaultIcons = {
+      "Deep Work Sprint": "◆",
+      "Pomodoro Focus": "◷",
+      "Study Session": "◎",
+      "Writing Block": "✎",
+      "Quick Review": "✓",
+      "Creative Flow": "✦"
+    };
+
     filteredSessions.forEach(session => {
       const card = document.createElement("div");
       card.className = "session-card";
 
       const isPreset = session.type === "preset";
       const isHistory = session.type === "history";
+      const icon = isPreset ? (defaultIcons[session.title] || "✦") : "▣";
       let actionButtonHTML = '';
       if (isPreset) {
-         if (app.isEditingPresets) {
-            actionButtonHTML = `
-              <div class="edit-action-row">
-                 <button class="btn-edit" onclick="app.openPresetModal('${session.id}', event)">✏️ Edit</button>
-                 <button class="btn-danger" onclick="app.deletePreset('${session.id}', event)">🗑️ Delete</button>
-              </div>
-            `;
-         } else {
-            actionButtonHTML = `<button class="session-action" onclick="app.startSessionClick('${session.id}', event)">▶ Start ${session.duration}m Session</button>`;
-         }
+        actionButtonHTML = `
+          <button class="session-action" onclick="app.startSessionClick('${session.id}', event)">▶ Start Session</button>
+          <div class="edit-action-row">
+            <button class="btn-edit" onclick="app.openPresetModal('${session.id}', event)" title="Edit preset">✎ Edit</button>
+            ${app.isEditingPresets ? `<button class="btn-danger" onclick="app.deletePreset('${session.id}', event)">Delete</button>` : ""}
+          </div>
+        `;
       } else if (isHistory && session.analytics) {
-         actionButtonHTML = `<button class="btn-show-more" onclick="app.openInsightModal('${session.id}', event)">📊 Show Detailed Insights</button>`;
+        actionButtonHTML = `<button class="btn-show-more" onclick="app.openInsightModal('${session.id}', event)">Show Detailed Insights</button>`;
       }
+
+      const score = Math.max(0, Math.min(100, Math.round(session.analytics?.focusEfficiency || 0)));
+      const band = getFocusBand(score);
+      const historyBar = isHistory && session.analytics
+        ? `<div class="history-score-bar"><span style="width:${score}%; background:${band.color};"></span></div>`
+        : "";
 
       card.innerHTML = `
         <div class="session-main">
           <div class="session-title">
-            ${isPreset ? '✨ ' : '📚 '}${session.title}
+            <span class="preset-icon">${icon}</span>${session.title}
           </div>
           <div class="session-time">${session.duration} min</div>
         </div>
+        <div class="session-intent">${session.intent}</div>
+        ${historyBar}
         <div class="session-details">
-          <div class="session-intent"><strong>Intent:</strong> ${session.intent}</div>
           <div class="session-stats">${session.stats}</div>
-          ${actionButtonHTML}
         </div>
+        ${isPreset ? actionButtonHTML.replace('<div class="edit-action-row">', '<div class="edit-action-row preset-actions">') : actionButtonHTML}
       `;
 
       card.addEventListener("click", () => {
@@ -363,7 +435,9 @@ const app = {
     const sessionData = {
       title: session.title,
       intent: session.intent,
+      objective: session.intent,
       duration: session.duration,
+      timeMinutes: session.duration,
       startTime: Date.now(),
       endTime: Date.now() + durationMs,
       isActive: true,
@@ -376,7 +450,7 @@ const app = {
       sessionData: sessionData
     }, "*");
 
-    alert(`Session started: ${session.title}! Close the website or check your BrainSync popup.`);
+    this.showToast(`Session started: ${session.title}. Check your BrainSync popup or keep working.`);
   },
 
   openInsightModal(sessionId, event) {
@@ -388,6 +462,7 @@ const app = {
     if (!modal) return;
 
     const eff = session.analytics.focusEfficiency || 0;
+    const band = getFocusBand(eff);
     const peakTimeMs = session.analytics.mostDistractingTimeElapsedMs || 0;
     const peakMins = Math.max(1, Math.round(peakTimeMs / 60000));
     const peakText = peakTimeMs > 0 ? `${peakMins} mins into session` : 'Stayed Focused';
@@ -400,36 +475,23 @@ const app = {
         </div>
         <div class="insight-grid">
           <div class="donut-chart-container">
-            <div class="donut-chart" style="background: conic-gradient(var(--accent-color) 0% ${eff}%, #111 ${eff}% 100%)">
+            <div class="donut-chart" style="background: conic-gradient(${band.color} 0% ${eff}%, #171728 ${eff}% 100%)">
               <div class="donut-hole">
                 <div class="donut-hole-text">${eff}%</div>
                 <div class="donut-hole-label">Overall Focus Score</div>
+                <div class="donut-band-label" style="color:${band.color};">${band.label}</div>
+                <div class="donut-band-subtitle">${band.sublabel}</div>
               </div>
             </div>
           </div>
           <div>
-            <table class="insight-table">
-              <tr>
-                <td>Session Time</td>
-                <td>${session.duration} min</td>
-              </tr>
-              <tr>
-                <td>Session Objective</td>
-                <td>${session.intent}</td>
-              </tr>
-              <tr>
-                <td>Tab Switches</td>
-                <td>${session.analytics.totalTabSwitches || 0}</td>
-              </tr>
-              <tr>
-                <td>Most Distracting Time</td>
-                <td>${peakText}</td>
-              </tr>
-              <tr>
-                <td>Longest Focus Streak</td>
-                <td>${Math.round((session.analytics.longestStreak || 0) / 60)} min</td>
-              </tr>
-            </table>
+            <div class="insight-stat-grid">
+              <div class="insight-stat"><span>Session Time</span><strong>${session.duration} min</strong></div>
+              <div class="insight-stat"><span>Tab Switches</span><strong>${session.analytics.totalTabSwitches || 0}</strong></div>
+              <div class="insight-stat"><span>Most Distracting Time</span><strong>${peakText}</strong></div>
+              <div class="insight-stat"><span>Longest Focus Streak</span><strong>${Math.round((session.analytics.longestStreak || 0) / 60)} min</strong></div>
+            </div>
+            <div class="insight-objective"><span>Session Objective</span><p>${session.intent}</p></div>
           </div>
         </div>
       </div>
@@ -499,22 +561,25 @@ const app = {
     }
 
     if (id) {
-       let index = saved.findIndex(s => s.id === id);
-       if (index !== -1) {
-          saved[index].title = title;
-          saved[index].intent = intent;
-          saved[index].duration = duration;
-       }
-    } else {
-       const newPreset = {
-          id: "p_" + Date.now(),
-          title: title,
-          intent: intent,
-          duration: duration,
-          stats: "Custom Preset",
+      const index = saved.findIndex(s => s.id === id);
+      if (index !== -1) {
+        saved[index] = {
+          ...saved[index],
+          title,
+          intent,
+          duration,
+          stats: saved[index].stats || "Custom Preset",
           type: "preset"
-       };
-       saved.push(newPreset);
+        };
+      }
+    } else {
+      saved.push({
+        title,
+        intent,
+        duration,
+        stats: "Custom Preset",
+        type: "preset"
+      });
     }
 
     try {
@@ -525,12 +590,14 @@ const app = {
       });
     } catch (e) {
       console.error("Failed to save presets to server", e);
+      this.showToast("Preset could not be saved.");
     }
 
     document.getElementById('preset-modal-overlay').classList.remove('show');
     
     await this.loadPresets();
     this.renderList("quickstart");
+    this.showToast(id ? "Preset updated." : "Preset created.");
   },
 
   async deletePreset(id, event) {

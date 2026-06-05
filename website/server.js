@@ -10,6 +10,61 @@ const { dbQuery } = require('./lib/server/db');
 
 const PORT = process.env.PORT || 3000;
 
+const DEFAULT_PRESETS = [
+  {
+    title: "Deep Work Sprint",
+    intent: "Focused, uninterrupted work on your most important task",
+    duration: 90,
+    stats: "Default Preset"
+  },
+  {
+    title: "Pomodoro Focus",
+    intent: "25-minute focused work block - classic Pomodoro technique",
+    duration: 25,
+    stats: "Default Preset"
+  },
+  {
+    title: "Study Session",
+    intent: "Read, review notes, and absorb new material",
+    duration: 45,
+    stats: "Default Preset"
+  },
+  {
+    title: "Writing Block",
+    intent: "Draft, write, or edit - no editing other tabs",
+    duration: 60,
+    stats: "Default Preset"
+  },
+  {
+    title: "Quick Review",
+    intent: "Review flashcards, summaries, or key concepts",
+    duration: 15,
+    stats: "Default Preset"
+  },
+  {
+    title: "Creative Flow",
+    intent: "Brainstorm, design, draw, or explore ideas freely",
+    duration: 50,
+    stats: "Default Preset"
+  }
+];
+
+async function seedDefaultPresets(userId, username) {
+  for (const preset of DEFAULT_PRESETS) {
+    try {
+      await createPreset(userId, {
+        username,
+        title: preset.title,
+        intent: preset.intent,
+        duration: preset.duration,
+        stats: preset.stats
+      });
+    } catch (e) {
+      if (e.code !== '23505' && !(e instanceof PresetError)) throw e;
+    }
+  }
+}
+
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -56,8 +111,6 @@ const server = http.createServer(async (req, res) => {
     });
   };
 
-  const serverId = Date.now().toString();
-
   if (req.url === "/api/startup-id") {
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ id: serverId }));
@@ -84,6 +137,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const { username, password } = await getBody(req);
       const account = await createAccount({ username, password });
+      await seedDefaultPresets(account.id, account.username);
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ success: true, username: account.username, userId: account.id }));
     } catch (err) {
@@ -127,7 +181,11 @@ const server = http.createServer(async (req, res) => {
       const userId = userResult.rows[0].id;
 
       if (req.method === "GET") {
-        const presets = await getPresetsByUser(userId);
+        let presets = await getPresetsByUser(userId);
+        if (presets.length === 0) {
+          await seedDefaultPresets(userId, username);
+          presets = await getPresetsByUser(userId);
+        }
         const formattedPresets = presets.map(p => ({
           id: `preset_${p.preset_id}`,
           preset_id: p.preset_id,
@@ -268,7 +326,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        const duration = session.duration !== undefined ? parseInt(session.duration) : (session.timeMinutes !== undefined ? parseInt(session.timeMinutes) : 0);
+        const duration = session.duration !== undefined ? parseInt(session.duration) : (session.timeMinutes !== undefined ? parseInt(session.timeMinutes) : 0) || 0;
         const startTime = session.startTime || (session.endTime - duration * 60 * 1000);
 
         await createInsight(userId, {
@@ -280,14 +338,6 @@ const server = http.createServer(async (req, res) => {
           completedAt: session.completedAt,
           analytics: session.analytics
         });
-
-        if (presetId && !isNaN(presetId)) {
-          try {
-            await deletePreset(presetId, userId);
-          } catch (deleteErr) {
-            console.error(`Failed to delete preset ${presetId} on session completion:`, deleteErr);
-          }
-        }
 
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ success: true }));
@@ -351,4 +401,3 @@ async function start() {
 }
 
 start();
-

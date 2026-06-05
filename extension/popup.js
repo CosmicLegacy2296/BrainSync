@@ -1,6 +1,6 @@
 const app = document.getElementById("app");
 const screens = {
-  login: document.getElementById("login-screen"),
+  auth: document.getElementById("auth-screen"),
   welcome: document.getElementById("welcome-screen"),
   session: document.getElementById("session-screen"),
   flow: document.getElementById("flow-screen"),
@@ -28,7 +28,66 @@ const activeType = document.getElementById("active-type");
 const activeTitle = document.getElementById("active-title");
 const countdown = document.getElementById("countdown");
 const focusLevelText = document.getElementById("focus-level-text");
-const focusMeterBarFill = document.getElementById("focus-meter-bar-fill");
+const focusRingFill = document.getElementById("focus-ring-fill");
+const focusBandLabel = document.getElementById("focus-band-label");
+const focusRingContainer = document.getElementById("focus-ring-container");
+const popupTabStatusDot = document.getElementById("popup-tab-status-dot");
+const popupTabStatusText = document.getElementById("popup-tab-status-text");
+
+const WEBSITE_URL = "https://brainsync.sub-sync.ca"; // Change this if your website runs elsewhere
+
+// FOCUS_BANDS - keep in sync with background.js and content.js
+const FOCUS_BANDS = [
+  {
+    min: 85, max: 100,
+    label: "Deep Focus",
+    sublabel: "You're in the zone.",
+    color: "#52d9a0",
+    glowColor: "rgba(82, 217, 160, 0.3)",
+    ringColor: "#52d9a0",
+    dotClass: "focus-deep"
+  },
+  {
+    min: 65, max: 84,
+    label: "On Track",
+    sublabel: "Staying focused.",
+    color: "#FFD700",
+    glowColor: "rgba(255, 215, 0, 0.3)",
+    ringColor: "#FFD700",
+    dotClass: "focus-good"
+  },
+  {
+    min: 45, max: 64,
+    label: "Drifting",
+    sublabel: "Pull back to your task.",
+    color: "#ffb347",
+    glowColor: "rgba(255, 179, 71, 0.3)",
+    ringColor: "#ffb347",
+    dotClass: "focus-drift"
+  },
+  {
+    min: 20, max: 44,
+    label: "Losing Focus",
+    sublabel: "Refocus now.",
+    color: "#ff7043",
+    glowColor: "rgba(255, 112, 67, 0.35)",
+    ringColor: "#ff7043",
+    dotClass: "focus-low"
+  },
+  {
+    min: 0, max: 19,
+    label: "Distracted",
+    sublabel: "Breathe and return.",
+    color: "#ff4d4d",
+    glowColor: "rgba(255, 77, 77, 0.4)",
+    ringColor: "#ff4d4d",
+    dotClass: "focus-critical"
+  }
+];
+
+function getFocusBand(score) {
+  return FOCUS_BANDS.find(b => score >= b.min && score <= b.max) || FOCUS_BANDS[4];
+}
 
 let currentType = "School";
 let flowTimer = null;
@@ -36,6 +95,8 @@ let endTime = null;
 let audioContext = null;
 let isPaused = false;
 let remainingMs = 0;
+let lastFocusBandLabel = "Deep Focus";
+let confirmEndArmed = false;
 
 const defaultSettings = {
   popupSize: "large",
@@ -176,6 +237,9 @@ async function endFlowSession(completed = false) {
 
   sessionHeading.textContent = sessionScreenHeading;
   showScreen("session");
+  confirmEndArmed = false;
+  const cancelBtn = document.getElementById("cancel-flow");
+  if (cancelBtn) cancelBtn.textContent = "End Early";
 }
 
 async function startFlowSession(payload) {
@@ -207,6 +271,8 @@ async function startFlowSession(payload) {
     if (msLeft <= 0) {
       clearInterval(flowTimer);
       flowTimer = null;
+      sessionHeading.textContent = sessionScreenHeading;
+      showScreen("session");
     }
   }, 250);
 }
@@ -228,18 +294,40 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
 }
 
 function updateFocusMeter(level) {
-  if (focusLevelText && focusMeterBarFill) {
-    const safeLevel = Math.max(0, Math.min(100, Math.round(level)));
-    focusLevelText.textContent = `${safeLevel}%`;
-    focusMeterBarFill.style.width = `${safeLevel}%`;
-
-    if (safeLevel < 40) {
-      focusMeterBarFill.style.background = "linear-gradient(90deg, #ff4d4d, #ff8080)";
-    } else if (safeLevel < 70) {
-      focusMeterBarFill.style.background = "linear-gradient(90deg, #ffb347, #ffcc33)";
-    } else {
-      focusMeterBarFill.style.background = "linear-gradient(90deg, #18c2ff, var(--accent))";
+  const safeLevel = Math.max(0, Math.min(100, Math.round(level)));
+  const band = getFocusBand(safeLevel);
+  const circumference = 326.7;
+  const dashOffset = circumference - (safeLevel / 100) * circumference;
+  if (focusRingFill) {
+    focusRingFill.style.strokeDashoffset = dashOffset;
+    focusRingFill.style.stroke = band.ringColor;
+  }
+  if (focusLevelText) focusLevelText.textContent = `${safeLevel}%`;
+  if (focusBandLabel) {
+    focusBandLabel.textContent = band.label;
+    focusBandLabel.style.color = band.color;
+  }
+  if (focusRingContainer) {
+    focusRingContainer.style.setProperty("--bs-glow", band.glowColor);
+    if (band.label !== lastFocusBandLabel) {
+      focusRingContainer.classList.remove("bs-band-change");
+      void focusRingContainer.offsetWidth;
+      focusRingContainer.classList.add("bs-band-change");
+      lastFocusBandLabel = band.label;
     }
+  }
+}
+
+function updateTabStatus(type = "neutral") {
+  if (popupTabStatusDot) popupTabStatusDot.className = `flow-status-dot ${type}`;
+  if (popupTabStatusText) {
+    popupTabStatusText.textContent = type === "relevant"
+      ? "Currently browsing: on task"
+      : type === "high_distraction"
+        ? "Currently browsing: distraction"
+        : type === "pending"
+          ? "Currently browsing: analyzing"
+          : "Currently browsing: off task";
   }
 }
 
@@ -287,13 +375,16 @@ if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local") {
       if (changes.brainsyncUser) {
-        window.location.reload();
+        init();
       }
       if (changes.brainsyncFocusLevel) {
         updateFocusMeter(changes.brainsyncFocusLevel.newValue);
       }
       if (changes.brainsyncBreathing) {
         handleBreathingState(changes.brainsyncBreathing.newValue);
+      }
+      if (changes.brainsyncCurrentTabType) {
+        updateTabStatus(changes.brainsyncCurrentTabType.newValue || "neutral");
       }
       if (changes.brainsyncActiveSession) {
         const s = changes.brainsyncActiveSession.newValue;
@@ -312,8 +403,12 @@ if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
 
 async function init() {
   const currentUser = await storage.get("brainsyncUser", null);
+  if (flowTimer) {
+    clearInterval(flowTimer);
+    flowTimer = null;
+  }
   if (!currentUser) {
-    showScreen("login");
+    showScreen("auth");
     document.getElementById("session-settings-toggle").style.display = "none";
     document.getElementById("session-notes-toggle").style.display = "none";
     return;
@@ -335,6 +430,7 @@ async function init() {
 
   const initialFocus = await storage.get("brainsyncFocusLevel", 100);
   updateFocusMeter(initialFocus);
+  updateTabStatus(await storage.get("brainsyncCurrentTabType", "neutral"));
 
   // Resume active session if exists
   const breathingState = await storage.get("brainsyncBreathing", null);
@@ -350,7 +446,6 @@ async function init() {
       countdown.textContent = formatTime(isPaused ? remainingMs : (endTime - Date.now()));
       showScreen("flow");
 
-      if (flowTimer) clearInterval(flowTimer);
       flowTimer = setInterval(() => {
         if (isPaused) {
           countdown.textContent = formatTime(remainingMs);
@@ -361,6 +456,8 @@ async function init() {
         if (msLeft <= 0) {
           clearInterval(flowTimer);
           flowTimer = null;
+          sessionHeading.textContent = sessionScreenHeading;
+          showScreen("session");
         }
       }, 250);
 
@@ -394,7 +491,19 @@ document.getElementById("flow-home").addEventListener("click", () => {
   sessionHeading.textContent = sessionScreenHeading;
   showScreen("session");
 });
-document.getElementById("cancel-flow").addEventListener("click", () => endFlowSession(false));
+document.getElementById("cancel-flow").addEventListener("click", () => {
+  const cancelBtn = document.getElementById("cancel-flow");
+  if (!confirmEndArmed) {
+    confirmEndArmed = true;
+    cancelBtn.textContent = "Confirm end?";
+    setTimeout(() => {
+      confirmEndArmed = false;
+      if (cancelBtn) cancelBtn.textContent = "End Early";
+    }, 3000);
+    return;
+  }
+  endFlowSession(false);
+});
 
 document.getElementById("session-notes-toggle").addEventListener("click", () => openPanel(notesPanel));
 document.getElementById("session-settings-toggle").addEventListener("click", () => openPanel(settingsPanel));
@@ -435,50 +544,37 @@ sessionForm.addEventListener("submit", async (event) => {
     type: currentType,
     title: sessionTitleInput.value.trim(),
     timeMinutes: sessionTimeInput.value,
-    objective: sessionObjectiveInput.value.trim()
+    objective: sessionObjectiveInput.value.trim(),
+    intent: sessionObjectiveInput.value.trim()
   });
   await storage.set("brainsyncFocusLevel", 100);
   updateFocusMeter(100);
 });
 
-// Popup Login Form handler
-const popupLoginForm = document.getElementById("popup-login-form");
-if (popupLoginForm) {
-  popupLoginForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const user = document.getElementById("popup-username").value.trim();
-    const pass = document.getElementById("popup-password").value.trim();
-    const errorEl = document.getElementById("popup-login-error");
-
-    try {
-      const res = await fetch("http://localhost:3000/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: user, password: pass })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        errorEl.style.display = "none";
-        await storage.set("brainsyncUser", data.username);
-        window.location.reload();
-      } else {
-        errorEl.style.display = "block";
-        errorEl.textContent = "Invalid username or password.";
-      }
-    } catch (err) {
-      errorEl.style.display = "block";
-      errorEl.textContent = "Cannot connect to server. Ensure it is running.";
-    }
+document.querySelectorAll(".dur-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    sessionTimeInput.value = btn.dataset.mins;
+    document.querySelectorAll(".dur-btn").forEach(el => el.classList.remove("active"));
+    btn.classList.add("active");
   });
-}
+});
 
 const openWebsiteLoginBtn = document.getElementById("openWebsiteLogin");
 if (openWebsiteLoginBtn) {
   openWebsiteLoginBtn.addEventListener("click", (e) => {
     e.preventDefault();
     if (typeof chrome !== "undefined" && chrome.tabs) {
-      chrome.tabs.create({ url: "https://brainsync.sub-sync.ca/#home" });
+      chrome.tabs.create({ url: `${WEBSITE_URL}/#home` });
+    } else {
+      window.open(`${WEBSITE_URL}/#home`, "_blank");
     }
+  });
+}
+
+const refreshAuthBtn = document.getElementById("refresh-auth");
+if (refreshAuthBtn) {
+  refreshAuthBtn.addEventListener("click", () => {
+    init();
   });
 }
 

@@ -37,10 +37,32 @@ async function dbWithTransaction(callback) {
 }
 
 async function ensureDatabaseSchema() {
-  // Create schema if not exists
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS public.accounts (
+      id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+      username TEXT NOT NULL,
+      email TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      display_name TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP DEFAULT now(),
+      updated_at TIMESTAMP DEFAULT now()
+    );
+  `);
+
+  await dbQuery(`
+    CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_lower_idx
+    ON public.accounts (LOWER(username));
+  `);
+
+  await dbQuery(`
+    CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_lower_idx
+    ON public.accounts (LOWER(email));
+  `);
+
   await dbQuery('CREATE SCHEMA IF NOT EXISTS "BrainSync";');
 
-  // Create presets table if not exists in BrainSync schema
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS "BrainSync".presets (
       preset_id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -54,12 +76,7 @@ async function ensureDatabaseSchema() {
       UNIQUE(user_id, title)
     );
   `);
-  
-  await dbQuery(`
-    CREATE UNIQUE INDEX IF NOT EXISTS unique_title ON "BrainSync".presets (user_id, title);
-  `);
 
-  // Create insights table if not exists in BrainSync schema
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS "BrainSync".insights (
       insight_id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -77,8 +94,10 @@ async function ensureDatabaseSchema() {
   await dbQuery(`
     CREATE INDEX IF NOT EXISTS insights_user_id_idx ON "BrainSync".insights(user_id);
   `);
+
+  await dbQuery(`
+    CREATE INDEX IF NOT EXISTS presets_user_id_idx ON "BrainSync".presets(user_id);
+  `);
 }
 
 module.exports = { dbQuery, dbWithTransaction, ensureDatabaseSchema };
-
-
