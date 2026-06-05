@@ -259,21 +259,33 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ error: "Missing session data" }));
         }
 
+        let presetId = session.presetId;
+        if (presetId) {
+          if (typeof presetId === 'string' && presetId.startsWith('preset_')) {
+            presetId = parseInt(presetId.substring(7));
+          } else {
+            presetId = parseInt(presetId);
+          }
+        }
+
+        const duration = session.duration !== undefined ? parseInt(session.duration) : (session.timeMinutes !== undefined ? parseInt(session.timeMinutes) : 0);
+        const startTime = session.startTime || (session.endTime - duration * 60 * 1000);
+
         await createInsight(userId, {
           title: session.title,
           intent: session.intent || session.objective,
-          duration: session.duration,
-          startTime: session.startTime,
+          duration: duration,
+          startTime: startTime,
           endTime: session.endTime,
           completedAt: session.completedAt,
           analytics: session.analytics
         });
 
-        if (session.presetId) {
+        if (presetId && !isNaN(presetId)) {
           try {
-            await deletePreset(session.presetId, userId);
+            await deletePreset(presetId, userId);
           } catch (deleteErr) {
-            console.error(`Failed to delete preset ${session.presetId} on session completion:`, deleteErr);
+            console.error(`Failed to delete preset ${presetId} on session completion:`, deleteErr);
           }
         }
 
