@@ -218,10 +218,10 @@ a {
 
 .login-wall {
   display: none;
-  grid-template-columns: 1fr minmax(320px, 420px);
-  gap: 2.5rem;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 3rem;
   align-items: stretch;
-  max-width: 1000px;
+  max-width: 1100px;
   margin: 80px auto;
   padding: 0 2rem;
 }
@@ -240,11 +240,13 @@ a {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  align-items: flex-start;
   min-height: 440px;
   position: relative;
   background:
     linear-gradient(160deg, rgba(255, 215, 0, 0.18) 0%, rgba(255, 179, 71, 0.06) 60%, transparent 100%),
     var(--bg-secondary);
+  word-wrap: break-word;
 }
 
 .login-visual::before {
@@ -267,18 +269,17 @@ a {
 
 .login-mark {
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 4.5vw, 3.6rem);
+  font-size: clamp(2rem, 3.5vw, 3.2rem);
   font-weight: 800;
-  line-height: 1.05;
-  margin-bottom: 16px;
+  line-height: 1.1;
+  margin-bottom: 20px;
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .login-visual p,
@@ -925,7 +926,7 @@ a {
   }
 
   .login-mark {
-    font-size: clamp(1.8rem, 8vw, 2.8rem);
+    font-size: clamp(1.6rem, 6vw, 2.4rem);
   }
 
   .sessions-header {
