@@ -201,6 +201,7 @@ function isHighDopamineUrl(url) {
 class FocusEngine {
   constructor(session) {
     this.session = session;
+    // FIX: use session.startTime which is now always set by popup.js
     this.sessionStartTime = session.startTime || Date.now();
     this.active = true;
 
@@ -219,7 +220,9 @@ class FocusEngine {
     this.maxRiskReached = 0;
     this.mostDistractingTimeElapsed = 0;
     this.focusSamples = [];
+    // FIX: track sample count continuously, take first sample immediately after a short delay
     this.lastSampleTime = Date.now();
+    this.sampleInterval = 20000; // sample every 20s instead of 30s to get more data points
 
     this.reward30 = false;
     this.reward60 = false;
@@ -231,8 +234,18 @@ class FocusEngine {
     this.lastTickTime = Date.now();
     this.lastTabSwitchTime = Date.now();
 
-    this.intervalId = setInterval(() => this.tick(), 2000);
+    // FIX: Write initial focus=100 to storage immediately so popup reflects engine state
     this.syncStorage();
+
+    this.intervalId = setInterval(() => this.tick(), 2000);
+
+    // FIX: Take an initial sample after 10s so even short sessions have data
+    setTimeout(() => {
+      if (this.active && this.focusSamples.length === 0) {
+        this.focusSamples.push(Math.round(this.actualFocus));
+        this.lastSampleTime = Date.now();
+      }
+    }, 10000);
   }
 
   stop() {
@@ -332,6 +345,7 @@ class FocusEngine {
       this.addRisk(1.5 * dt);
       this.focusStreakTime = 0;
     } else {
+      // "pending" - slight penalty for unknown state
       this.applyPenalty(0.05 * dt);
       this.focusStreakTime = 0;
     }
@@ -352,7 +366,8 @@ class FocusEngine {
       triggerBreathingExercise(this.session);
     }
 
-    if (now - this.lastSampleTime >= 30000) {
+    // FIX: Sample more frequently (every 20s) so short sessions have real data
+    if (now - this.lastSampleTime >= this.sampleInterval) {
       this.focusSamples.push(Math.round(this.actualFocus));
       this.lastSampleTime = now;
     }
@@ -442,17 +457,30 @@ class FocusEngine {
   }
 
   getEfficiency() {
+    // FIX: Always push a final sample right now before computing efficiency
+    // This ensures even very short sessions or sessions where service worker
+    // had few ticks still produce a real score based on actualFocus.
+    const finalActual = Math.round(this.actualFocus);
+    this.focusSamples.push(finalActual);
+
     let finalScore;
-    if (this.focusSamples.length >= 2) {
+    if (this.focusSamples.length >= 1) {
       const sum = this.focusSamples.reduce((a, b) => a + b, 0);
       finalScore = Math.round(sum / this.focusSamples.length);
     } else {
-      finalScore = Math.round(this.actualFocus);
+      finalScore = finalActual;
     }
 
+    // Cap at maxPossibleFocus
+    finalScore = Math.min(this.maxPossibleFocus, finalScore);
+
+    // Small bonus for completing without needing breathing exercise
     if (!this.session.hasBreathed) {
       finalScore = Math.min(100, finalScore + 3);
     }
+
+    // Clamp to valid range
+    finalScore = Math.max(0, Math.min(100, finalScore));
 
     const band = getFocusBand(finalScore);
 
@@ -464,7 +492,8 @@ class FocusEngine {
       longestStreak: Math.round(this.longestStreak / 1000),
       totalTabSwitches: this.peekCount,
       mostDistractingTimeElapsedMs: this.mostDistractingTimeElapsed,
-      maxPossibleFocus: Math.round(this.maxPossibleFocus)
+      maxPossibleFocus: Math.round(this.maxPossibleFocus),
+      sampleCount: this.focusSamples.length
     };
   }
 }
@@ -498,6 +527,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
         if (engine) engine.stop();
         engine = new FocusEngine(s);
+
+        // FIX: Immediately classify the active tab so we don't start in "pending" limbo
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs && tabs[0]) engine.onTabSwitch(tabs[0], true);
+        });
 
         chrome.alarms.create("sessionEnd", { when: s.endTime });
       } else {
@@ -574,9 +608,25 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       ...data.brainsyncActiveSession,
       completedAt: new Date().toISOString()
     };
+
+    // FIX: Capture analytics BEFORE stopping the engine
     if (engine) {
       completedSession.analytics = engine.getEfficiency();
+    } else {
+      // Engine was lost (service worker restart) - use a fallback
+      completedSession.analytics = {
+        focusEfficiency: 0,
+        focusBandLabel: "Unknown",
+        nearDistractions: 0,
+        recoveryAttempts: 0,
+        longestStreak: 0,
+        totalTabSwitches: 0,
+        mostDistractingTimeElapsedMs: 0,
+        maxPossibleFocus: 100,
+        sampleCount: 0
+      };
     }
+
     delete completedSession.isActive;
     sessions.push(completedSession);
 

@@ -218,10 +218,10 @@ a {
 
 .login-wall {
   display: none;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-  gap: 2rem;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 3rem;
   align-items: stretch;
-  max-width: 960px;
+  max-width: 1100px;
   margin: 80px auto;
   padding: 0 2rem;
 }
@@ -232,43 +232,76 @@ a {
   border: 1px solid var(--border-subtle);
   backdrop-filter: blur(20px);
   border-radius: 20px;
-  padding: 36px;
+  padding: 40px;
+  overflow: hidden;
 }
 
 .login-visual {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  align-items: flex-start;
   min-height: 440px;
+  position: relative;
   background:
-    linear-gradient(135deg, rgba(255, 215, 0, 0.16), rgba(255, 179, 71, 0.08)),
+    linear-gradient(160deg, rgba(255, 215, 0, 0.18) 0%, rgba(255, 179, 71, 0.06) 60%, transparent 100%),
     var(--bg-secondary);
+  word-wrap: break-word;
+}
+
+.login-visual::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.18) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .login-mark {
   font-family: var(--font-display);
-  font-size: clamp(2.6rem, 7vw, 4.5rem);
+  font-size: clamp(2rem, 3.5vw, 3.2rem);
   font-weight: 800;
-  line-height: 1;
-  margin-bottom: 18px;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .login-visual p,
 #authSubtitle {
   color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .login-card h2 {
   font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  margin-top: 28px;
+  gap: 14px;
+  margin-top: 24px;
 }
 
 .auth-form-hidden {
@@ -277,12 +310,15 @@ a {
 
 .auth-form input,
 .form-group input {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.05);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: 12px;
+  padding: 14px 18px;
   color: var(--text-primary);
   font-family: var(--font-body);
+  font-size: 0.95rem;
+  width: 100%;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .auth-form input:focus,
@@ -886,7 +922,11 @@ a {
   }
 
   .login-visual {
-    min-height: 220px;
+    min-height: 200px;
+  }
+
+  .login-mark {
+    font-size: clamp(1.6rem, 6vw, 2.4rem);
   }
 
   .sessions-header {

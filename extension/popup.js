@@ -245,19 +245,34 @@ async function endFlowSession(completed = false) {
 async function startFlowSession(payload) {
   const mins = Number(payload.timeMinutes);
   const durationMs = mins * 60 * 1000;
-  endTime = Date.now() + durationMs;
+  const startTime = Date.now(); // FIX: capture startTime explicitly
+  endTime = startTime + durationMs;
 
   activeType.textContent = payload.type;
   activeTitle.textContent = payload.title;
   countdown.textContent = formatTime(durationMs);
   showScreen("flow");
 
-  // Save to storage; background worker will pick it up and set an alarm
+  // FIX: Reset the displayed focus meter immediately before the engine starts,
+  // but do NOT write to brainsyncFocusLevel after the session is set — the engine
+  // owns that value. Reset it first, then set the session.
+  updateFocusMeter(100);
+
+  // FIX: Include startTime in the session so background.js FocusEngine has it,
+  // and parse timeMinutes as a number to avoid string/number bugs in server.
   const activeSession = {
     ...payload,
+    timeMinutes: mins,          // ensure it's a number
+    duration: mins,             // FIX: also include duration for server compatibility
+    startTime,                  // FIX: required for elapsed-time tracking in engine
     endTime,
     isActive: true
   };
+
+  // FIX: Set the session in storage (which triggers engine creation in background.js).
+  // The engine's constructor calls syncStorage() immediately, which will overwrite
+  // brainsyncFocusLevel to 100 from its own internal state — so we must NOT
+  // set brainsyncFocusLevel separately after this, as it would race with the engine.
   await storage.set("brainsyncActiveSession", activeSession);
 
   if (flowTimer) clearInterval(flowTimer);
@@ -547,8 +562,9 @@ sessionForm.addEventListener("submit", async (event) => {
     objective: sessionObjectiveInput.value.trim(),
     intent: sessionObjectiveInput.value.trim()
   });
-  await storage.set("brainsyncFocusLevel", 100);
-  updateFocusMeter(100);
+  // FIX: Do NOT reset brainsyncFocusLevel here — the engine owns this value
+  // and syncStorage() in the FocusEngine constructor already sets it to 100.
+  // Calling storage.set here races with the engine and can overwrite engine state.
 });
 
 document.querySelectorAll(".dur-btn").forEach((btn) => {
