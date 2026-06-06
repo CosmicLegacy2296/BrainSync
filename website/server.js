@@ -12,39 +12,9 @@ const PORT = process.env.PORT || 3000;
 
 const DEFAULT_PRESETS = [
   {
-    title: "Deep Work Sprint",
-    intent: "Focused, uninterrupted work on your most important task",
-    duration: 90,
-    stats: "Default Preset"
-  },
-  {
     title: "Pomodoro Focus",
     intent: "25-minute focused work block - classic Pomodoro technique",
     duration: 25,
-    stats: "Default Preset"
-  },
-  {
-    title: "Study Session",
-    intent: "Read, review notes, and absorb new material",
-    duration: 45,
-    stats: "Default Preset"
-  },
-  {
-    title: "Writing Block",
-    intent: "Draft, write, or edit - no editing other tabs",
-    duration: 60,
-    stats: "Default Preset"
-  },
-  {
-    title: "Quick Review",
-    intent: "Review flashcards, summaries, or key concepts",
-    duration: 15,
-    stats: "Default Preset"
-  },
-  {
-    title: "Creative Flow",
-    intent: "Brainstorm, design, draw, or explore ideas freely",
-    duration: 50,
     stats: "Default Preset"
   }
 ];
@@ -167,7 +137,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      // Get user_id from username
       const userResult = await dbQuery(
         `SELECT id FROM accounts WHERE LOWER(username) = LOWER($1)`,
         [username]
@@ -207,15 +176,12 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ error: "Presets must be an array" }));
         }
 
-        // Get current presets from DB
         const currentPresets = await getPresetsByUser(userId);
         const currentPresetIds = new Set(currentPresets.map(p => parseInt(p.preset_id)));
         const incomingPresetIds = new Set();
 
-        // Process incoming presets
         for (const preset of presetsArray) {
           if (preset.id?.startsWith("preset_")) {
-            // Existing preset - update
             const presetId = parseInt(preset.id.substring(7));
             incomingPresetIds.add(presetId);
             await updatePreset(presetId, userId, {
@@ -225,7 +191,6 @@ const server = http.createServer(async (req, res) => {
               stats: preset.stats
             });
           } else {
-            // New preset - create
             const newPreset = await createPreset(userId, {
               username: username,
               title: preset.title,
@@ -237,14 +202,12 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        // Delete presets that were removed
         for (const presetId of currentPresetIds) {
           if (!incomingPresetIds.has(presetId)) {
             await deletePreset(presetId, userId);
           }
         }
 
-        // Get updated presets to return
         const updatedPresets = await getPresetsByUser(userId);
         const formattedPresets = updatedPresets.map(p => ({
           id: `preset_${p.preset_id}`,
@@ -282,7 +245,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      // Get user_id from username
       const userResult = await dbQuery(
         `SELECT id FROM accounts WHERE LOWER(username) = LOWER($1)`,
         [username]
@@ -361,7 +323,6 @@ const server = http.createServer(async (req, res) => {
   fs.readFile(filePath, (err, data) => {
     if (err) {
       if (err.code == "ENOENT") {
-        // Fallback to index.html for SPA routing
         fs.readFile(path.join(__dirname, "index.html"), (err, data) => {
           if (err) {
             res.writeHead(500);
