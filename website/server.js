@@ -88,36 +88,90 @@ const server = http.createServer(async (req, res) => {
 
   if (req.url === "/api/login" && req.method === "POST") {
     try {
-      const { username, password } = await getBody(req);
-      const account = await loginWithPassword({ username, password });
+      const { identity, password } = await getBody(req);
+      
+      // Try to find user by username or email
+      const userResult = await dbQuery(
+        `SELECT id, username, email, display_name FROM accounts 
+         WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1)
+         LIMIT 1`,
+        [identity]
+      );
+
+      if (userResult.rows.length === 0) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: 'Invalid username/email or password.' }));
+      }
+
+      const user = userResult.rows[0];
+      
+      // Verify password using the existing login function
+      const account = await loginWithPassword({ username: user.username, password });
+      
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: true, username: account.username, userId: account.id }));
+      return res.end(JSON.stringify({ 
+        user: {
+          id: account.id,
+          username: account.username,
+          email: account.email || user.email,
+          displayName: account.display_name || account.username
+        }
+      }));
     } catch (err) {
       if (err instanceof AuthInputError) {
-        res.writeHead(err.status, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ success: false, error: err.message }));
+        res.writeHead(401, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: 'Invalid username/email or password.' }));
       }
       console.error('Login error:', err);
       res.writeHead(500, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: false, error: "Server error" }));
+      return res.end(JSON.stringify({ error: 'Unable to log in right now.' }));
     }
   }
 
   if (req.url === "/api/signup" && req.method === "POST") {
     try {
-      const { username, password } = await getBody(req);
-      const account = await createAccount({ username, password });
+      const { username, email, password } = await getBody(req);
+      
+      if (!username || !email || !password) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: 'Username, email, and password are required.' }));
+      }
+
+      if (username.length < 3) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: 'Username must be at least 3 characters.' }));
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: 'Please enter a valid email address.' }));
+      }
+
+      const account = await createAccount({ username, email, password });
       await seedDefaultPresets(account.id, account.username);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: true, username: account.username, userId: account.id }));
+      
+      res.writeHead(201, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ 
+        user: {
+          id: account.id,
+          username: account.username,
+          email: account.email,
+          displayName: account.display_name || account.username
+        }
+      }));
     } catch (err) {
-      if (err instanceof AuthInputError || err instanceof AuthConflictError) {
+      if (err instanceof AuthInputError) {
         res.writeHead(err.status, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ success: false, error: err.message }));
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+      if (err instanceof AuthConflictError) {
+        res.writeHead(409, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: 'Username or email already exists.' }));
       }
       console.error('Signup error details:', err.message, err.code);
       res.writeHead(500, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ success: false, error: err.message || "Server error" }));
+      return res.end(JSON.stringify({ error: 'Unable to create account right now.' }));
     }
   }
 

@@ -54,6 +54,7 @@ async function createAccount(input) {
 
   const username = normalizeUsername(input.username ?? '');
   const password = input.password ?? '';
+  const email = input.email ?? '';
 
   if (!username || !password) {
     throw new AuthInputError('Username and password are required.');
@@ -66,19 +67,19 @@ async function createAccount(input) {
   const password_hash = hashPassword(password);
 
   try {
-    const email = `${username}@brainsync.local`;
+    const finalEmail = email || `${username}@brainsync.local`;
     const result = await dbQuery(
       `INSERT INTO accounts (username, email, password_hash, display_name, role, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, username, email`,
-      [username, email, password_hash, username, 'user', true]
+       RETURNING id, username, email, display_name`,
+      [username, finalEmail, password_hash, username, 'user', true]
     );
 
     return result.rows[0];
   } catch (error) {
     const pgCode = error.code;
     if (pgCode === '23505') {
-      throw new AuthConflictError('Username already exists.');
+      throw new AuthConflictError('Username or email already exists.');
     }
 
     throw error;

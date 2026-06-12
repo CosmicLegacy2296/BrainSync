@@ -6,10 +6,10 @@
     <title>BrainSync Website</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body data-theme="dark">
     <!-- Navigation -->
     <nav class="navbar">
       <div class="nav-brand" data-route="home">
@@ -25,15 +25,17 @@
     </nav>
 
     <!-- Login Wall (Shows when not logged in) -->
-    <section id="loginWall" class="login-wall" style="display: none; text-align: center; max-width: 400px; margin: 80px auto; padding: 40px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
-      <div style="font-size: 3.5rem; margin-bottom: 15px;">🔐</div>
-      <h2 style="margin-bottom: 20px; font-weight: 800; color: var(--accent-color);">Login Required</h2>
-      <p style="color: var(--text-muted); margin-bottom: 30px; font-size: 0.95rem;">Please enter your credentials to access your personalized presets and focus insights.</p>
+    <section id="loginWall" class="login-wall" style="text-align: center; max-width: 400px; margin: 80px auto; padding: 40px; background: var(--surface); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow); backdrop-filter: blur(10px);">
+      <div style="font-size: 3rem; margin-bottom: 10px;">🔐</div>
+      <h2 style="margin-bottom: 20px;">Login Required</h2>
+      <p style="color: var(--text-muted); margin-bottom: 30px;">Please enter your credentials to view and manage your personalized settings.</p>
       <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
-        <input type="text" id="usernameInput" placeholder="Username (user1 or user2)" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
-        <input type="password" id="passwordInput" placeholder="Password (pass1 or pass2)" style="padding: 12px; border-radius: 8px; border: 1px solid var(--panel-border); background: rgba(0,0,0,0.5); color: var(--text-main); font-size: 1rem;" required>
-        <div id="loginError" style="color: #ff4d4d; font-size: 0.9rem; display: none;">Invalid username or password.</div>
-        <button type="submit" class="btn-primary" style="margin-top: 10px;">Login</button>
+        <input type="text" id="identityInput" placeholder="Username or Email" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-main); font-size: 1rem;" required>
+        <input type="email" id="emailInput" placeholder="Email" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-main); font-size: 1rem; display: none;" required>
+        <input type="password" id="passwordInput" placeholder="Password" style="padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.1); color: var(--text-main); font-size: 1rem;" required>
+        <div id="loginError" style="color: #ff4d4d; font-size: 0.9rem; display: none;">Invalid username/email or password.</div>
+        <button type="submit" id="loginSubmitBtn" class="primary-btn" style="margin-top: 10px;">Login</button>
+        <button type="button" id="toggleCreateAccountBtn" class="secondary-btn">Create an account</button>
       </form>
     </section>
 
