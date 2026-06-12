@@ -3,7 +3,7 @@ let currentObjectiveCoreKeywords = [];
 let activeSessionActive = false;
 let isBreathingSequenceActive = false;
 let engine = null;
-const WEBSITE_URL = "http://localhost:3000";
+const WEBSITE_URL = "https://brainsync.sub-sync.ca/";
 
 // FOCUS_BANDS - keep in sync with popup.js and content.js
 const FOCUS_BANDS = [
@@ -544,6 +544,58 @@ chrome.storage.onChanged.addListener((changes, area) => {
         }
       }
     } else {
+      const oldSession = changes.brainsyncActiveSession.oldValue;
+      if (activeSessionActive && oldSession && oldSession.isActive) {
+        const elapsedMs = Date.now() - (oldSession.startTime || Date.now());
+        const elapsedMins = Math.max(1, Math.round(elapsedMs / 60000));
+
+        const completedSession = {
+          ...oldSession,
+          completedAt: new Date().toISOString(),
+          duration: elapsedMins,
+          endTime: Date.now()
+        };
+
+        if (engine) {
+          completedSession.analytics = engine.getEfficiency();
+        } else {
+          completedSession.analytics = {
+            focusEfficiency: 0,
+            focusBandLabel: "Unknown",
+            nearDistractions: 0,
+            recoveryAttempts: 0,
+            longestStreak: 0,
+            totalTabSwitches: 0,
+            mostDistractingTimeElapsedMs: 0,
+            maxPossibleFocus: 100,
+            sampleCount: 0
+          };
+        }
+
+        delete completedSession.isActive;
+
+        chrome.storage.local.get("brainsyncSessions", (data) => {
+          const sessions = data.brainsyncSessions || [];
+          sessions.push(completedSession);
+          chrome.storage.local.set({ brainsyncSessions: sessions });
+        });
+
+        chrome.storage.local.get("brainsyncUser", async (data) => {
+          if (data.brainsyncUser) {
+            try {
+              const baseApiUrl = WEBSITE_URL.endsWith('/') ? WEBSITE_URL.slice(0, -1) : WEBSITE_URL;
+              await fetch(`${baseApiUrl}/api/insights`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: data.brainsyncUser, session: completedSession })
+              });
+            } catch (e) {
+              console.error("Failed to sync completed session to server", e);
+            }
+          }
+        });
+      }
+
       activeSessionActive = false;
       chrome.alarms.clear("sessionEnd");
       if (engine) {
@@ -566,11 +618,11 @@ chrome.runtime.onInstalled.addListener(() => {
         chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ["content.js"]
-        }).catch(() => {});
+        }).catch(() => { });
         chrome.scripting.insertCSS({
           target: { tabId: tab.id },
           files: ["content.css"]
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
   });
@@ -643,7 +695,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
     if (data.brainsyncUser) {
       try {
-        await fetch(`${WEBSITE_URL}/api/insights`, {
+        const baseApiUrl = WEBSITE_URL.endsWith('/') ? WEBSITE_URL.slice(0, -1) : WEBSITE_URL;
+        await fetch(`${baseApiUrl}/api/insights`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username: data.brainsyncUser, session: completedSession })
@@ -660,7 +713,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       message: "Your focus session has finished! Complete your flow."
     });
 
-    chrome.runtime.sendMessage({ action: "play_alarm" }).catch(() => {});
+    chrome.runtime.sendMessage({ action: "play_alarm" }).catch(() => { });
     playAudioOffscreen(data.brainsyncSettings || {});
 
     chrome.tabs.query({}, (tabs) => {
@@ -699,7 +752,7 @@ async function playDirectOffscreenSound(action, soundType) {
     action: action,
     soundType: soundType,
     volume: 0.5
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 async function triggerBreathingExercise(session) {
